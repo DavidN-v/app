@@ -1,4 +1,9 @@
-"""Datos iniciales: usuarios por rol y, opcionalmente, el laboratorio de demostración."""
+"""Datos iniciales que se cargan la primera vez que arranca la API.
+
+Siempre se crea un usuario por cada rol. Si la opción seed_demo_data está activada y la base
+de datos no tiene dispositivos, también se registran los seis dispositivos del laboratorio
+y el modelo que tiene instalado cada uno.
+"""
 
 import hashlib
 
@@ -10,6 +15,7 @@ from .drift import BINS
 from .models import Device, MLModel, User, utcnow
 from .security import hash_password
 
+# Dispositivos del laboratorio: identificador, nombre, tipo de hardware y función
 DEMO_DEVICES = [
     ("rpi5-vision", "Raspberry Pi 5 (Visión)", "rpi5", "Visión artificial"),
     ("rpi5-genai", "Raspberry Pi 5 (GenAI)", "rpi5", "Modelo de lenguaje pequeño"),
@@ -19,16 +25,20 @@ DEMO_DEVICES = [
     ("esp32-env", "ESP32", "esp32", "Regresión ambiental"),
 ]
 
-# Distribución de confianza de referencia (validación offline): Beta(8, 2), media ≈ 0.8
+# Distribución de confianza de referencia para los modelos simulados: una Beta(8, 2), con media
+# cercana a 0,8, que representa un modelo que suele estar bastante seguro de sus predicciones
 _REF_HIST = [0.0, 0.0, 0.0004, 0.0033, 0.0158, 0.0507, 0.1261, 0.241, 0.3372, 0.2256]
-assert len(_REF_HIST) == len(BINS) - 1
+# YOLOv8n real (rpi5-vision) con la lente limpia: 240 fotogramas medidos con
+# devices/vision/calibrate.py, suavizado de Laplace
+_YOLO_REF_HIST = [0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.4551, 0.5286]
+assert len(_REF_HIST) == len(_YOLO_REF_HIST) == len(BINS) - 1
 
 DEMO_MODELS = [
     # name, version, framework, task, license, device, metrics
     ("yolo", "8.1", "onnx", "detección de objetos", "agpl-3.0", "rpi5-vision",
-     {"mAP50": 0.87, "reference_confidence_hist": _REF_HIST}),
-    ("llama3-mini", "3.2-q4", "gguf", "asistente industrial", "llama3", "rpi5-genai",
-     {"tokens_per_s": 9.1}),
+     {"mAP50": 0.87, "reference_confidence_hist": _YOLO_REF_HIST}),
+    ("qwen2.5-0.5b", "q4_k_m", "gguf", "asistente industrial", "apache-2.0", "rpi5-genai",
+     {"tokens_per_s": 22.0}),
     ("telemetry-agent", "1.4", "onnx", "clasificación de eventos", "apache-2.0", "rpi5-agent",
      {"f1": 0.91}),
     ("yolo-nano", "8.1-int8", "onnx", "detección de objetos", "agpl-3.0", "uno-q",
@@ -36,11 +46,12 @@ DEMO_MODELS = [
     ("anomaly-ts", "2.0", "tflite", "series temporales", "apache-2.0", "ventuno",
      {"auc": 0.94}),
     ("env-regressor", "1.1", "tflite", "regresión ambiental", "mit", "esp32-env",
-     {"mae": 0.42, "r2": 0.93}),
+     {"mae": 1.23, "target": "índice de confort 0-100"}),
 ]
 
 
 def run(db: Session) -> None:
+    """Carga los datos iniciales sin duplicar nada si ya existían."""
     s = get_settings()
     policies.ensure_defaults(db)
     if db.query(User).count() == 0:

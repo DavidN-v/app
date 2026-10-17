@@ -2,6 +2,13 @@ import { Routes } from '@angular/router';
 import { authGuard, roleGuard } from './core/auth.guard';
 import { ShellComponent } from './layout/shell.component';
 
+/**
+ * Rutas de la consola.
+ *
+ * Todas las páginas internas cuelgan de ShellComponent (menú lateral y cabecera) y exigen sesión.
+ * Cada página se carga solo cuando se visita por primera vez (loadComponent), lo que reduce
+ * el tamaño de la descarga inicial.
+ */
 export const routes: Routes = [
   {
     path: 'login',
@@ -42,6 +49,7 @@ export const routes: Routes = [
       {
         path: 'audit',
         title: 'Auditoría · Edge Governance',
+        // La auditoría solo la pueden consultar aprobadores y administradores
         canActivate: [roleGuard('approver')],
         loadComponent: () => import('./pages/audit/audit.component').then((m) => m.AuditComponent),
       },

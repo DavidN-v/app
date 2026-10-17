@@ -7,6 +7,7 @@ import { ToastService } from '../shared/toast.service';
 import { ApiService } from './api.service';
 import { LiveService } from './live.service';
 
+/** Clave donde se guarda si el usuario activó las notificaciones del sistema. */
 const PREF_KEY = 'eg.notify';
 const STAGE_LABEL: Record<string, string> = {
   confirmed: 'confirmado',
@@ -20,7 +21,7 @@ export function titleWithCount(title: string, count: number): string {
 }
 
 /**
- * Avisos globales: lo grave se ve aunque estés en otra página o en otra pestaña.
+ * Avisos globales, para que lo importante se vea aunque el usuario esté en otra página o pestaña.
  * - Alertas críticas y despliegues terminados como avisos emergentes.
  * - Número de alertas abiertas en el título de la pestaña.
  * - Notificación del sistema si la pestaña está en segundo plano y el usuario lo activó.
@@ -41,6 +42,7 @@ export class NotifyService {
     return typeof Notification !== 'undefined';
   }
 
+  /** Empieza a escuchar los eventos en vivo. Se llama al entrar en la consola. */
   start(destroyRef: DestroyRef): void {
     this.stop();
     const events = this.live.events$;
@@ -69,7 +71,7 @@ export class NotifyService {
         if (!ok) this.systemNotify('Despliegue fallido', msg);
       }),
       // Contador de alertas abiertas: al arrancar, cada minuto y cuando cambian
-      merge(timer(0, 60_000), events.pipe(filter((e) => e.type === 'alert'), debounceTime(400)))
+      merge(timer(0, 60_000), events.pipe(filter((e) => e.type === 'alert' || e.type === 'alert_resolved'), debounceTime(400)))
         .pipe(switchMap(() => this.api.alerts()), takeUntilDestroyed(destroyRef))
         .subscribe((alerts) => {
           this.openAlerts.set(alerts.filter((a) => a.status !== 'resolved').length);
@@ -81,6 +83,7 @@ export class NotifyService {
     );
   }
 
+  /** Deja de escuchar y limpia el título de la pestaña. */
   stop(): void {
     this.subs.forEach((s) => s.unsubscribe());
     this.subs = [];
@@ -95,6 +98,7 @@ export class NotifyService {
     });
   }
 
+  /** Activa o desactiva las notificaciones del sistema; la primera vez el navegador pide permiso. */
   async toggleBrowser(): Promise<void> {
     if (!this.browserSupported) return;
     if (this.browserEnabled()) {
@@ -117,6 +121,7 @@ export class NotifyService {
     this.title.setTitle(titleWithCount(this.title.getTitle(), this.openAlerts()));
   }
 
+  /** Muestra una notificación del sistema operativo, solo si la pestaña no está a la vista. */
   private systemNotify(title: string, body: string): void {
     if (!this.browserEnabled() || !this.browserSupported || Notification.permission !== 'granted') return;
     if (typeof document !== 'undefined' && !document.hidden) return;

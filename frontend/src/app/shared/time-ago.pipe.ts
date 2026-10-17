@@ -1,5 +1,6 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
+/** Convierte una fecha en un texto relativo, como "hace 5 min". */
 export function timeAgo(value: string | Date | null | undefined, now = Date.now()): string {
   if (!value) return 'nunca';
   const date = typeof value === 'string' ? new Date(withZone(value)) : value;
@@ -18,6 +19,7 @@ function withZone(iso: string): string {
   return /([zZ]|[+-]\d\d:?\d\d)$/.test(iso) ? iso : `${iso}Z`;
 }
 
+/** Uso en las plantillas: {{ fecha | timeAgo }} */
 @Pipe({ name: 'timeAgo' })
 export class TimeAgoPipe implements PipeTransform {
   transform(value: string | Date | null | undefined): string {

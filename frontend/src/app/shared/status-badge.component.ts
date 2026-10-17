@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+/** Texto en español de cada estado. */
 const LABELS: Record<string, string> = {
   online: 'En línea',
   offline: 'Sin conexión',
@@ -18,6 +19,7 @@ const LABELS: Record<string, string> = {
   critical: 'Crítica',
 };
 
+/** Color de cada estado: verde bien, cian informativo, ámbar pendiente, rojo problema. */
 const TONES: Record<string, string> = {
   online: 'green', deployed: 'green', succeeded: 'green', resolved: 'green',
   approved: 'cyan', info: 'cyan', acknowledged: 'cyan',
@@ -26,6 +28,7 @@ const TONES: Record<string, string> = {
   retired: 'muted',
 };
 
+/** Etiqueta de estado con su color, usada en todas las tablas. */
 @Component({
   selector: 'eg-status',
   changeDetection: ChangeDetectionStrategy.OnPush,

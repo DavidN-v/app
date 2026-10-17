@@ -15,13 +15,18 @@ import { SortState } from '../../shared/sort';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { TimeAgoPipe } from '../../shared/time-ago.pipe';
 
+/** Cada cuánto se recarga el resumen y el historial de la gráfica. */
 const REFRESH_MS = 15_000;
 const HISTORY_REFRESH_MS = 60_000;
+/** Líneas visibles en el registro en vivo. */
 const LOG_LINES = 18;
+/** Número de segmentos de las barras de CPU y RAM. */
 const SEGMENTS = 20;
+/** Clave donde se recuerda la ventana de tiempo elegida para la gráfica. */
 const RANGE_KEY = 'eg.latency.window';
 const WINDOW_SECONDS: Record<LatencyWindow, number> = { '5m': 300, '1h': 3600, '24h': 86400 };
 
+/** Tipos de línea del registro: telemetría, inferencia, alerta, conexión y despliegue. */
 export type LogKind = 'TEL' | 'INF' | 'ALR' | 'LNK' | 'OTA';
 export const LOG_KINDS: LogKind[] = ['TEL', 'INF', 'ALR', 'LNK', 'OTA'];
 
@@ -38,6 +43,7 @@ export interface LogLine {
 
 type FleetKey = 'id' | 'cpu' | 'ram' | 'temp' | 'latency';
 
+/** Media de los valores disponibles, ignorando los nulos. */
 function average(values: (number | null)[]): number | null {
   const v = values.filter((x): x is number => x !== null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
@@ -79,6 +85,7 @@ export function logMatches(line: LogLine, kinds: ReadonlySet<LogKind>, device: s
   return kinds.has(line.kind) && (!device || line.device === device);
 }
 
+/** Recupera la ventana de tiempo que el usuario eligió la última vez. */
 function readWindow(): LatencyWindow {
   try {
     const v = localStorage.getItem(RANGE_KEY);
@@ -88,6 +95,10 @@ function readWindow(): LatencyWindow {
   }
 }
 
+/**
+ * Vista general: indicadores principales de la flota, tabla de dispositivos, gráfica de
+ * latencia, registro de eventos en vivo, resumen de gobernanza y últimas alertas.
+ */
 @Component({
   selector: 'eg-overview',
   imports: [ChartDirective, CountUpDirective, StatusBadgeComponent, TimeAgoPipe, RouterLink, MetricComponent],
@@ -167,18 +178,14 @@ export class OverviewComponent implements OnInit {
     return { deployed: s.deployed ?? 0, approved: s.approved ?? 0, draft: s.draft ?? 0, retired: s.retired ?? 0 };
   });
 
-  protected readonly alerts = computed(() => {
-    const seen = new Set<number>();
-    return [...this.live.alertFeed(), ...this.recentAlerts()]
-      .filter((a) => !seen.has(a.id) && seen.add(a.id))
-      .slice(0, 4);
-  });
+  /** Solo las alertas sin resolver; las que el sistema cerró solo (por ejemplo, un dispositivo que volvió) no se muestran. */
+  protected readonly alerts = computed(() => this.recentAlerts().filter((a) => a.status !== 'resolved').slice(0, 4));
 
   private readonly names = computed(() =>
     Object.fromEntries(this.baseDevices().map((d) => [d.id, d.id.toUpperCase()])),
   );
 
-  /** 5 min usa los puntos en vivo; 1 h y 24 h el historial agregado del servidor. */
+  /** La ventana de 5 min usa los puntos recibidos en vivo; las de 1 h y 24 h, el historial del servidor. */
   private readonly chartSeries = computed<Record<string, Point[]>>(() => {
     if (this.window() !== '5m') return this.history();
     const since = Date.now() / 1000 - WINDOW_SECONDS['5m'];
@@ -199,6 +206,7 @@ export class OverviewComponent implements OnInit {
     );
   });
 
+  /** Segmentos encendidos de una barra según el porcentaje. */
   protected segmentsFor(pct: number | null): boolean[] {
     const lit = Math.round(((pct ?? 0) / 100) * SEGMENTS);
     return Array.from({ length: SEGMENTS }, (_, i) => i < lit);
@@ -245,11 +253,13 @@ export class OverviewComponent implements OnInit {
   }
 
   // --- Acciones del registro ------------------------------------------------
+  /** Mientras el ratón está sobre el registro, este se congela para poder leerlo. */
   protected setHover(on: boolean): void {
     this.hoverPaused.set(on);
     this.syncFreeze();
   }
 
+  /** Congela o reanuda el registro en vivo. */
   protected togglePause(): void {
     this.paused.update((p) => !p);
     this.syncFreeze();
@@ -293,7 +303,7 @@ export class OverviewComponent implements OnInit {
   ngOnInit(): void {
     // Se refresca cada 15 s y también (agrupado) cuando llega una alerta o un despliegue
     const changes$ = this.live.events$.pipe(
-      filter((e) => e.type === 'alert' || e.type === 'deployment'),
+      filter((e) => e.type === 'alert' || e.type === 'alert_resolved' || e.type === 'deployment'),
       debounceTime(500),
     );
     merge(timer(0, REFRESH_MS), changes$)
@@ -301,7 +311,10 @@ export class OverviewComponent implements OnInit {
         switchMap(() => this.api.overview()),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((o) => this.overview.set(o));
+      .subscribe((o) => {
+        this.overview.set(o);
+        this.api.alerts().subscribe((a) => this.recentAlerts.set(a));
+      });
     timer(0, REFRESH_MS)
       .pipe(
         switchMap(() => this.api.devices()),
@@ -311,7 +324,6 @@ export class OverviewComponent implements OnInit {
         this.baseDevices.set(d);
         this.loaded.set(true);
       });
-    this.api.alerts().subscribe((a) => this.recentAlerts.set(a));
 
     // Historial de la gráfica: al entrar (sobrevive a recargas) y cada minuto en 1 h / 24 h
     this.loadHistory();

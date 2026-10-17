@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+/** Página que se muestra cuando la dirección no corresponde a ninguna sección. */
 @Component({
   selector: 'eg-not-found',
   imports: [RouterLink],

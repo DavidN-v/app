@@ -1,4 +1,4 @@
-"""Historial de latencia por dispositivo para la gráfica (5 min, 1 h, 24 h)."""
+"""Historial de latencia por dispositivo para la gráfica de la vista general (5 min, 1 h y 24 h)."""
 
 import time
 from datetime import UTC, datetime, timedelta
@@ -14,18 +14,21 @@ from ..security import current_user
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
-# ventana -> (segundos, tamaño del bucket en segundos)
+# Ventana -> (duración en segundos, tamaño de cada grupo de puntos en segundos)
 WINDOWS = {"5m": (300, 0), "1h": (3600, 60), "24h": (86400, 300)}
+# Máximo de puntos por dispositivo en la ventana corta, para no saturar la gráfica
 MAX_RAW_POINTS = 300
 
 
 @router.get("/latency")
 def latency(window: Literal["5m", "1h", "24h"] = "5m", db: Session = Depends(get_db),
             _: User = Depends(current_user)) -> dict:
+    """Devuelve una serie de puntos [instante, latencia] por dispositivo."""
     span, bucket = WINDOWS[window]
     since = time.time() - span
     if bucket == 0:
-        # Ventana corta: puntos crudos del buffer en memoria, aligerados si hay demasiados
+        # Ventana corta: puntos individuales guardados en memoria;
+        # si hay demasiados, se toma uno de cada varios
         out = {}
         for device_id, points in hub.latency_series().items():
             recent = [p for p in points if p[0] >= since]
@@ -33,7 +36,8 @@ def latency(window: Literal["5m", "1h", "24h"] = "5m", db: Session = Depends(get
             out[device_id] = [[round(t, 3), v] for t, v in recent[::step]]
         return {"window": window, "series": out}
 
-    # Ventanas largas: minutos guardados + el minuto en curso, agrupados por bucket
+    # Ventanas largas: medias por minuto guardadas en la base de datos más el minuto en curso,
+    # agrupadas en intervalos; cada media se pondera por su número de inferencias
     acc: dict[str, dict[int, list[float]]] = {}
 
     def add(device_id: str, ts: float, avg: float, count: int) -> None:

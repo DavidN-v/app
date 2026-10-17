@@ -17,6 +17,7 @@ export class SortState<K extends string> {
     }
   }
 
+  /** Cambia el orden al pulsar la cabecera de una columna. */
   toggle(key: K): void {
     if (this.key() !== key) {
       this.key.set(key);
@@ -28,11 +29,13 @@ export class SortState<K extends string> {
     }
   }
 
+  /** Valor del atributo aria-sort, que indica el orden a los lectores de pantalla. */
   ariaSort(key: K): 'ascending' | 'descending' | 'none' {
     if (this.key() !== key) return 'none';
     return this.dir() === 'asc' ? 'ascending' : 'descending';
   }
 
+  /** Flecha que se muestra junto a la columna ordenada. */
   indicator(key: K): string {
     if (this.key() !== key) return '';
     return this.dir() === 'asc' ? '▲' : '▼';

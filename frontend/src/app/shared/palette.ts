@@ -9,8 +9,13 @@ export const DEVICE_COLORS: Record<string, string> = {
   'esp32-env': '#f472b6',
 };
 
+/** Colores para dispositivos que no están en la lista anterior. */
 const FALLBACK = ['#22d3ee', '#a3e635', '#818cf8', '#fbbf24', '#2dd4bf', '#e879f9'];
 
+/**
+ * Color de un dispositivo. Para los no previstos se calcula a partir de su identificador,
+ * de modo que un mismo dispositivo recibe siempre el mismo color.
+ */
 export function colorFor(deviceId: string): string {
   if (DEVICE_COLORS[deviceId]) return DEVICE_COLORS[deviceId];
   let hash = 0;
@@ -35,5 +40,6 @@ export function levelColor(value: number | null, warnAt: number, critAt: number)
   return STATUS.accent;
 }
 
+/** Colores del texto y de la cuadrícula de las gráficas. */
 export const CHART_TEXT = '#788292';
 export const CHART_GRID = '#2a303a';

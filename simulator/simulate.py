@@ -10,6 +10,7 @@ cuando (temperatura, latencia, drift) y responde a las órdenes de despliegue.
 import argparse
 import json
 import math
+import os
 import random
 import threading
 import time
@@ -20,6 +21,8 @@ import paho.mqtt.client as mqtt
 
 @dataclass
 class Profile:
+    """Comportamiento simulado de un dispositivo: valores medios, variación e incidente posible."""
+
     device_id: str
     model: str
     version: str
@@ -33,9 +36,11 @@ class Profile:
     state: dict = field(default_factory=dict)
 
 
+# Dispositivo, modelo, versión, CPU %, RAM %, temperatura °C, latencia ms, variación de la latencia,
+# si informa de la confianza y el incidente que puede sufrir
 PROFILES = [
     Profile("rpi5-vision", "yolo", "8.1", 42, 68, 55, 28, 4, True, "drift"),
-    Profile("rpi5-genai", "llama3-mini", "3.2-q4", 34, 68, 62, 42, 6, None, "high_temperature"),
+    Profile("rpi5-genai", "qwen2.5-0.5b", "q4_k_m", 34, 68, 62, 42, 6, None, "high_temperature"),
     Profile("rpi5-agent", "telemetry-agent", "1.4", 12, 28, 43, 31, 3, True),
     Profile("uno-q", "yolo-nano", "8.1-int8", 8, 18, 39, 25, 3, True),
     Profile("ventuno", "anomaly-ts", "2.0", 6, 16, 41, 37, 5, None, "high_latency"),
@@ -44,8 +49,12 @@ PROFILES = [
 
 
 class Simulator:
-    def __init__(self, host: str, port: int, rate: float, incidents: bool) -> None:
+    """Mantiene una conexión MQTT por dispositivo, como si fueran equipos independientes."""
+
+    def __init__(self, host: str, port: int, rate: float, incidents: bool, skip: set[str] | None = None) -> None:
         self.host, self.port, self.rate, self.incidents = host, port, rate, incidents
+        # Los dispositivos que ya corren de verdad (perfil "real") no se simulan
+        self.profiles = [p for p in PROFILES if p.device_id not in (skip or set())]
         self.clients: dict[str, mqtt.Client] = {}
         self.t0 = time.time()
 
@@ -67,6 +76,7 @@ class Simulator:
         return c
 
     def deploy(self, client: mqtt.Client, p: Profile, raw: bytes) -> None:
+        """Simula una instalación con sus etapas; una de cada diez falla en la verificación."""
         cmd = json.loads(raw)
         topic = f"edge/{p.device_id}/deploy/progress"
         ok = random.random() > 0.1
@@ -83,6 +93,7 @@ class Simulator:
         client.publish(f"edge/{p.device_id}/deploy/ack", json.dumps(ack), qos=1)
 
     def incident_active(self, p: Profile) -> bool:
+        """Indica si el dispositivo está sufriendo ahora su incidente."""
         if not self.incidents or not p.incident:
             return False
         # Cada dispositivo con incidente lo sufre durante 40 s de cada ~4 min, desfasados
@@ -90,6 +101,8 @@ class Simulator:
         return phase > 200
 
     def tick(self, p: Profile, t: float) -> None:
+        """Publica una lectura de telemetría y una inferencia. Los valores siguen una onda suave
+        con ruido aleatorio para que las gráficas se parezcan a las de un equipo real."""
         c = self.clients[p.device_id]
         wave = math.sin(t / 15 + hash(p.device_id) % 10)
         incident = self.incident_active(p)
@@ -117,13 +130,16 @@ class Simulator:
         c.publish(f"edge/{p.device_id}/inference", json.dumps(inference))
 
     def run(self) -> None:
-        for p in PROFILES:
+        """Conecta todos los dispositivos y publica datos hasta que se detenga el programa."""
+        for p in self.profiles:
             self.clients[p.device_id] = self.connect(p)
-        print(f"Simulando {len(PROFILES)} dispositivos contra {self.host}:{self.port}")
+        skipped = sorted({p.device_id for p in PROFILES} - {p.device_id for p in self.profiles})
+        print(f"Simulando {len(self.profiles)} dispositivos contra {self.host}:{self.port}"
+              + (f" (reales, no se simulan: {', '.join(skipped)})" if skipped else ""))
         try:
             while True:
                 t = time.time() - self.t0
-                for p in PROFILES:
+                for p in self.profiles:
                     self.tick(p, t)
                 time.sleep(1 / self.rate)
         except KeyboardInterrupt:
@@ -141,5 +157,8 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=1883)
     ap.add_argument("--rate", type=float, default=1.0, help="mensajes por segundo por dispositivo")
     ap.add_argument("--no-incidents", action="store_true")
+    ap.add_argument("--skip", default=os.getenv("SIM_SKIP", ""),
+                    help="dispositivos que no se simulan porque corren de verdad (separados por comas)")
     args = ap.parse_args()
-    Simulator(args.host, args.port, args.rate, not args.no_incidents).run()
+    skip = {s.strip() for s in args.skip.split(",") if s.strip()}
+    Simulator(args.host, args.port, args.rate, not args.no_incidents, skip).run()

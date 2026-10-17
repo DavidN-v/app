@@ -1,4 +1,5 @@
-// Registro tree-shaken de ECharts: solo se empaquetan los módulos que se usan.
+// Registro de ECharts por partes: solo se incluyen en la aplicación los tipos de gráfica y
+// componentes que se usan, lo que reduce mucho el tamaño de la descarga.
 import { GaugeChart, LineChart, PieChart } from 'echarts/charts';
 import {
   GridComponent,

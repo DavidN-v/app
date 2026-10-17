@@ -12,6 +12,10 @@ import { ToastService, UNDO_WINDOW_MS } from '../../shared/toast.service';
 type Filter = ModelStatus | 'all';
 type ModelKey = 'name' | 'framework' | 'license' | 'owner' | 'status' | 'created';
 
+/**
+ * Página del registro de modelos: listado por estado, ficha de detalle, registro de nuevas
+ * versiones y acciones de aprobación y retirada según el rol del usuario.
+ */
 @Component({
   selector: 'eg-models',
   imports: [StatusBadgeComponent, ReactiveFormsModule, DatePipe, KeyValuePipe],
@@ -91,7 +95,7 @@ export class ModelsComponent implements OnInit {
     });
   }
 
-  /** Separación de funciones: nadie aprueba su propio modelo. */
+  /** Separación de funciones: nadie puede aprobar un modelo que ha registrado él mismo. */
   canApprove(m: MLModel): boolean {
     return m.status === 'draft' && this.auth.can('approver') && m.owner !== this.auth.user()?.username;
   }
@@ -160,6 +164,7 @@ export class ModelsComponent implements OnInit {
     });
   }
 
+  /** Registra el modelo del formulario. */
   submit(): void {
     if (this.form.invalid) return;
     const value = this.form.getRawValue();

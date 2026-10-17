@@ -139,3 +139,14 @@ def test_system_collect_shape():
     data = system.collect()
     assert set(data) == {"cpu", "ram", "temp", "disk"}
     assert 0 <= data["ram"] <= 100
+
+
+def test_board_meter_measures_against_emulated_board():
+    procs = [[(1, 10.0, 512 * 1024 * 1024), (2, 5.0, 512 * 1024 * 1024)]]
+    clock = iter([100.0, 102.0])
+    meter = system.BoardMeter(cpus=4, ram_mb=4096, processes=lambda: iter(procs[0]),
+                              clock=lambda: next(clock))
+    assert meter.sample() == (0.0, 25.0)  # primera muestra: sin intervalo todavía
+    # En 2 s el proceso 1 usó 3 s de CPU y aparece un proceso 3 nuevo: 3 / (2 * 4) = 37.5 %
+    procs[0] = [(1, 13.0, 512 * 1024 * 1024), (2, 5.0, 512 * 1024 * 1024), (3, 50.0, 0)]
+    assert meter.sample() == (37.5, 25.0)

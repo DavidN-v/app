@@ -15,6 +15,7 @@ interface NavItem {
   min?: Role;
 }
 
+/** Nombre en español de cada rol, para el pie del menú. */
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrador',
   approver: 'Aprobador',
@@ -22,6 +23,11 @@ const ROLE_LABEL: Record<Role, string> = {
   viewer: 'Lector',
 };
 
+/**
+ * Estructura común de las páginas internas: menú lateral, cabecera con el estado de la
+ * conexión y zona central donde se muestra cada página. Al entrar abre la conexión en tiempo
+ * real y activa los avisos; al salir los cierra.
+ */
 @Component({
   selector: 'eg-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastHostComponent],

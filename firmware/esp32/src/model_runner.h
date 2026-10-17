@@ -1,4 +1,5 @@
-// Envoltorio de TFLite Micro para el modelo de regresión ambiental.
+// Ejecución del modelo de confort ambiental con TensorFlow Lite Micro, la versión de
+// TensorFlow pensada para microcontroladores. El modelo va incluido dentro del firmware.
 // El modelo se incluye como array C generado con:
 //   xxd -i env_regressor.tflite > src/model_data.h
 #pragma once
@@ -6,6 +7,7 @@
 #include <Arduino.h>
 #include <TensorFlowLite_ESP32.h>
 #include <tensorflow/lite/micro/all_ops_resolver.h>
+#include <tensorflow/lite/micro/micro_error_reporter.h>
 #include <tensorflow/lite/micro/micro_interpreter.h>
 #include <tensorflow/lite/schema/schema_generated.h>
 
@@ -16,7 +18,8 @@ class ModelRunner {
   void begin() {
     model_ = tflite::GetModel(env_regressor_tflite);
     static tflite::AllOpsResolver resolver;
-    static tflite::MicroInterpreter interpreter(model_, resolver, arena_, kArenaSize);
+    static tflite::MicroErrorReporter reporter;
+    static tflite::MicroInterpreter interpreter(model_, resolver, arena_, kArenaSize, &reporter);
     interpreter_ = &interpreter;
     interpreter_->AllocateTensors();
   }

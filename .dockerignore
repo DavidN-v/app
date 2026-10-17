@@ -1,0 +1,13 @@
+# Contexto de los dispositivos reales (devices/*): solo necesitan edge-agent y su carpeta
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.db
+frontend
+backend
+firmware
+infra
+.git
+.env

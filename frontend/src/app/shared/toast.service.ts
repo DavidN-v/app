@@ -5,6 +5,7 @@ export const UNDO_WINDOW_MS = new InjectionToken<number>('UNDO_WINDOW_MS', { fac
 
 export type ToastKind = 'ok' | 'info' | 'warn' | 'crit';
 
+/** Botón opcional dentro de un aviso. */
 export interface ToastAction {
   label: string;
   run: () => void;
@@ -20,7 +21,9 @@ export interface Toast {
   duration: number;
 }
 
+/** Avisos visibles a la vez; los más antiguos se descartan. */
 const MAX_VISIBLE = 5;
+/** Tiempo en pantalla según el tipo de aviso. Los críticos no se cierran solos. */
 const DEFAULTS: Record<ToastKind, number> = { ok: 4000, info: 5000, warn: 7000, crit: 0 };
 
 /** Avisos emergentes de toda la consola. */
@@ -30,6 +33,7 @@ export class ToastService {
   private nextId = 0;
   private readonly timers = new Map<number, ReturnType<typeof setTimeout>>();
 
+  /** Muestra un aviso y devuelve su identificador. */
   show(kind: ToastKind, title: string, opts: { detail?: string; action?: ToastAction; duration?: number } = {}): number {
     const toast: Toast = { id: ++this.nextId, kind, title, detail: opts.detail, action: opts.action, duration: opts.duration ?? DEFAULTS[kind] };
     this.toasts.update((list) => {
@@ -49,6 +53,7 @@ export class ToastService {
     return this.show('crit', title, { detail, duration: 8000 });
   }
 
+  /** Cierra un aviso. */
   dismiss(id: number): void {
     this.clearTimer(id);
     this.toasts.update((list) => list.filter((t) => t.id !== id));

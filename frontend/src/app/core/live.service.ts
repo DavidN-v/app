@@ -3,15 +3,23 @@ import { Subject } from 'rxjs';
 import { AuthService } from './auth.service';
 import { Alert, Device, LiveEvent, Point } from './models';
 
-export const SERIES_WINDOW = 600; // puntos por dispositivo (5 min a 2 Hz)
+/** Puntos de latencia que se conservan por dispositivo (5 minutos a 2 mensajes por segundo). */
+export const SERIES_WINDOW = 600;
+/** Alertas recientes que se guardan para el panel de la vista general. */
 const MAX_FEED = 50;
+/** Espera máxima entre intentos de reconexión. */
 const MAX_BACKOFF_MS = 15_000;
 
+/** Cambios recibidos en vivo que se superponen a los datos cargados por REST. */
 type LivePatch = Partial<Pick<Device, 'cpu' | 'ram' | 'temp' | 'latency_ms' | 'status' | 'last_seen'>>;
 
 /**
- * Conexión WebSocket con la API: mantiene en signals el estado en vivo de la flota
- * y se reconecta sola con backoff exponencial.
+ * Conexión en tiempo real con la API mediante WebSocket.
+ *
+ * Guarda en señales el estado en vivo de la flota (últimas lecturas, latencias y alertas) y
+ * reenvía cada evento a quien esté suscrito a events$. Si la conexión se corta, se reintenta
+ * esperando cada vez el doble de tiempo (0,5 s, 1 s, 2 s...) hasta un máximo de 15 s, para no
+ * saturar al servidor mientras se recupera.
  */
 @Injectable({ providedIn: 'root' })
 export class LiveService implements OnDestroy {
@@ -31,6 +39,7 @@ export class LiveService implements OnDestroy {
   private counter = 0;
   private rateTimer: ReturnType<typeof setInterval> | null = null;
 
+  /** Abre la conexión y empieza a contar los mensajes por segundo. */
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
@@ -41,6 +50,7 @@ export class LiveService implements OnDestroy {
     this.open();
   }
 
+  /** Cierra la conexión (al cerrar sesión). */
   stop(): void {
     this.stopped = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
@@ -86,6 +96,11 @@ export class LiveService implements OnDestroy {
       case 'alert':
         this.alertFeed.update((feed) => [event.data, ...feed].slice(0, MAX_FEED));
         break;
+      case 'alert_resolved': {
+        const ids = new Set(event.data.ids);
+        this.alertFeed.update((feed) => feed.map((a) => (ids.has(a.id) ? { ...a, status: 'resolved' } : a)));
+        break;
+      }
     }
     this.events$.next(event);
   }
@@ -96,10 +111,12 @@ export class LiveService implements OnDestroy {
     return devices.map((d) => ({ ...d, ...(patches[d.id] ?? {}) }) as Device);
   }
 
+  /** Acumula los cambios recibidos para un dispositivo. */
   private patch(id: string, p: LivePatch): void {
     this.patches.update((all) => ({ ...all, [id]: { ...all[id], ...p } }));
   }
 
+  /** Abre el WebSocket con el token de sesión y programa la reconexión si se cierra. */
   private open(): void {
     const token = this.auth.token();
     if (!token || this.stopped) return;

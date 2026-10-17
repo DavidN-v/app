@@ -8,12 +8,17 @@ import { SortState } from '../../shared/sort';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { TimeAgoPipe } from '../../shared/time-ago.pipe';
 
+/** Nombre del tipo de hardware. */
 const KIND_LABEL: Record<Device['kind'], string> = {
   rpi5: 'Raspberry Pi 5',
   arduino: 'Arduino',
   esp32: 'ESP32',
 };
 
+/**
+ * Página de dispositivos: una ficha por dispositivo con su estado, métricas actuales y modelo
+ * instalado. Los datos se cargan una vez y después se actualizan con los eventos en vivo.
+ */
 @Component({
   selector: 'eg-devices',
   imports: [StatusBadgeComponent, TimeAgoPipe, MetricComponent],
@@ -80,7 +85,7 @@ export class DevicesComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly live = inject(LiveService);
   private readonly base = signal<Device[]>([]);
-  /** ?focus=id desde el registro en vivo: resalta y lleva a esa unidad */
+  /** Si la dirección incluye ?focus=id (al pulsar una línea del registro), se resalta ese dispositivo. */
   readonly focus = input<string | undefined>();
   protected readonly sort = new SortState<'name' | 'cpu' | 'ram' | 'temp' | 'latency' | 'status'>();
   protected readonly query = signal('');

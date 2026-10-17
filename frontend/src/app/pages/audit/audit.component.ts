@@ -4,6 +4,10 @@ import { ApiService } from '../../core/api.service';
 import { AuditEntry, ChainVerification } from '../../core/models';
 import { ToastService } from '../../shared/toast.service';
 
+/**
+ * Página de auditoría: historial de todas las acciones y botón para verificar que la
+ * cadena de resúmenes está intacta, es decir, que nadie ha modificado el historial.
+ */
 @Component({
   selector: 'eg-audit',
   imports: [DatePipe, JsonPipe, SlicePipe],
@@ -74,6 +78,7 @@ export class AuditComponent implements OnInit {
     });
   }
 
+  /** Pide al backend que recorra la cadena y compruebe cada resumen. */
   verify(): void {
     this.api.verifyAudit().subscribe((v) => {
       this.verification.set(v);

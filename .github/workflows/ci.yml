@@ -28,6 +28,17 @@ jobs:
       - run: ruff check .
       - run: pytest
 
+  devices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install numpy pillow pytest ./edge-agent
+      - run: pytest devices/vision/tests
+      - run: pytest devices/genai/tests
+      - run: pytest devices/agent/tests
+
   frontend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }

@@ -1,8 +1,8 @@
 // ===========================================================================
-// EDGE/GOV — Telemetría táctica
-// Sustrato: CRT apagado. Tinta: fósforo blanco. Un solo acento: rojo aviación,
-// reservado para lo que exige atención. Verde terminal solo en el indicador "en vivo".
-// Esquinas a 90°, rejilla visible, cifras monumentales, datos en monoespaciada.
+// Estilos globales de la consola
+// Fondo gris muy oscuro y texto claro, inspirado en las pantallas de los terminales de control.
+// El rojo se reserva para lo que requiere atención y el verde para el indicador de conexión.
+// Esquinas rectas, rejilla visible, cifras grandes y datos en letra monoespaciada.
 // ===========================================================================
 :root {
   --bg: #15181d;
@@ -40,7 +40,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-// --- Postproceso analógico: barrido CRT, grano y una línea de escaneo -------
+// --- Efecto de pantalla antigua: líneas horizontales y textura ---------------
 body::before {
   content: '';
   position: fixed; inset: 0; z-index: var(--z-fx); pointer-events: none;
@@ -157,7 +157,7 @@ a { color: var(--text); text-underline-offset: 3px; }
 .content { padding: 20px 24px 48px; }
 .content > :not(router-outlet) { display: flex; flex-direction: column; gap: 16px; max-width: 1760px; }
 
-// --- Celdas con marcas de registro -----------------------------------------
+// --- Celdas con marcas en las esquinas --------------------------------------
 .card {
   position: relative;
   background: var(--cell);
@@ -180,7 +180,7 @@ a { color: var(--text); text-underline-offset: 3px; }
   &::after { content: ' >>'; color: var(--red); }
   &:hover { color: var(--text); } }
 
-// --- Arranque: las celdas se revelan en secuencia --------------------------
+// --- Al cargar, las celdas aparecen una tras otra ---------------------------
 .boot > * { animation: boot 0.8s var(--ease-out) both; }
 @for $i from 1 through 12 {
   .boot > *:nth-child(#{$i}) { animation-delay: #{($i - 1) * 90}ms; }
@@ -424,7 +424,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
   input:focus-visible + span { outline: 2px solid var(--red); outline-offset: 2px; }
 }
 
-// --- Login ------------------------------------------------------------------
+// --- Inicio de sesión -------------------------------------------------------
 .login-page { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(380px, 1fr); background: var(--bg); }
 .login-intro {
   position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 28px;
@@ -455,12 +455,12 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
 }
 .login-hint { font-size: 12px; color: var(--dim); line-height: 1.5; margin: 0; border-top: 1px dashed var(--line); padding-top: 14px; }
 
-// --- 404 --------------------------------------------------------------------
+// --- Página no encontrada ---------------------------------------------------
 .not-found { padding: 24px 0; display: flex; flex-direction: column; gap: 16px;
   .code { font-family: var(--macro); font-weight: 900; font-size: clamp(8rem, 22vw, 20rem); line-height: 0.8; letter-spacing: -0.07em; color: var(--red); }
   h2 { font-size: 14px; } p { margin: 0; color: var(--muted); max-width: 60ch; } .btn { align-self: flex-start; } }
 
-// --- Responsive -------------------------------------------------------------
+// --- Adaptación a pantallas pequeñas ----------------------------------------
 @media (max-width: 1500px) { .device-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1280px) {
   .ov-hero { grid-template-columns: 1fr 1fr; .readouts-cell { grid-column: 1 / -1; } }
@@ -494,6 +494,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
   .search { max-width: none; }
 }
 
+// Si el usuario ha pedido reducir las animaciones en su sistema, se desactivan
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .scanbeam { display: none; }

@@ -5,6 +5,7 @@ import { CHART_GRID, CHART_TEXT, colorFor } from './palette';
 const MONO = 'JetBrains Mono, Consolas, monospace';
 const RED = '#ff2a2a';
 
+/** Opciones de la gráfica de latencia. */
 export interface LatencyChartOpts {
   /** Nombres de serie ocultos (por clic en la leyenda o por aislar un dispositivo) */
   hidden?: ReadonlySet<string>;
@@ -12,6 +13,10 @@ export interface LatencyChartOpts {
   threshold?: number;
 }
 
+/**
+ * Configuración de la gráfica de latencia: una línea por dispositivo, con su color propio,
+ * y una línea discontinua roja que marca el umbral de la política.
+ */
 export function latencyChart(
   series: Record<string, Point[]>,
   names: Record<string, string> = {},
@@ -77,6 +82,7 @@ export function latencyChart(
   };
 }
 
+/** Minigráfica sin ejes para mostrar la tendencia reciente dentro de una tarjeta. */
 export function sparkline(points: Point[], color: string): EChartsCoreOption {
   return {
     animation: false,

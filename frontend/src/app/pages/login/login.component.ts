@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { describeError } from '../../shared/errors';
 
+/** Pantalla de inicio de sesión. */
 @Component({
   selector: 'eg-login',
   imports: [ReactiveFormsModule],
@@ -82,11 +83,13 @@ export class LoginComponent {
     password: ['', Validators.required],
   });
 
+  /** Indica si un campo debe mostrarse como erróneo (vacío después de intentar entrar). */
   protected invalid(name: 'username' | 'password'): boolean {
     const c = this.form.controls[name];
     return c.invalid && c.touched;
   }
 
+  /** Envía las credenciales; si son correctas, entra en la consola. */
   submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();

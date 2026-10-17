@@ -13,6 +13,7 @@ import { SortState } from '../../shared/sort';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { ToastService } from '../../shared/toast.service';
 
+/** Pasos de un despliegue tal como se muestran en la barra de progreso. */
 export const STEPS: { key: DeployStage; label: string }[] = [
   { key: 'requested', label: 'Solicitado' },
   { key: 'downloading', label: 'Descargando' },
@@ -21,17 +22,21 @@ export const STEPS: { key: DeployStage; label: string }[] = [
   { key: 'confirmed', label: 'Confirmado' },
 ];
 
-/** Estado de cada paso para dibujar la barra de progreso. */
+/**
+ * Estado de cada paso para dibujar la barra de progreso: los anteriores a la etapa actual
+ * están hechos, la actual está en curso (o ha fallado) y los siguientes están pendientes.
+ */
 export function stepStates(d: Pick<Deployment, 'status' | 'stage'>): ('done' | 'current' | 'todo' | 'fail')[] {
   if (d.status === 'succeeded') return STEPS.map(() => 'done');
   const reached = Math.max(0, STEPS.findIndex((s) => s.key === d.stage));
   return STEPS.map((_, i) => {
     if (i < reached) return 'done';
     if (i === reached) return d.status === 'failed' ? 'fail' : 'current';
-    return d.status === 'failed' ? 'todo' : 'todo';
+    return 'todo';
   });
 }
 
+/** Tiempo transcurrido desde una fecha, en formato mm:ss. */
 export function elapsed(fromIso: string, toMs: number): string {
   const from = Date.parse(/([zZ]|[+-]\d\d:?\d\d)$/.test(fromIso) ? fromIso : `${fromIso}Z`);
   const s = Math.max(0, Math.round((toMs - from) / 1000));
@@ -40,6 +45,10 @@ export function elapsed(fromIso: string, toMs: number): string {
 
 type DepKey = 'id' | 'model' | 'device' | 'created';
 
+/**
+ * Página de despliegues: formulario para instalar un modelo aprobado en un dispositivo, con
+ * comprobación previa de políticas, y tabla de despliegues con su progreso en tiempo real.
+ */
 @Component({
   selector: 'eg-deployments',
   imports: [FormsModule, StatusBadgeComponent, DatePipe],
@@ -218,6 +227,7 @@ export class DeploymentsComponent implements OnInit {
     return Date.parse(/([zZ]|[+-]\d\d:?\d\d)$/.test(iso) ? iso : `${iso}Z`);
   }
 
+  /** Un despliegue pendiente que tarda más de lo normal se resalta en la tabla. */
   protected isSlow(d: Deployment): boolean {
     return d.status === 'pending' && this.now() - this.parse(d.created_at) > (this.timeout() / 2) * 1000;
   }
@@ -228,7 +238,7 @@ export class DeploymentsComponent implements OnInit {
     return STEPS.find((s) => s.key === d.stage)?.label ?? d.stage;
   }
 
-  /** Dry-run contra el motor de políticas cada vez que cambia la selección. */
+  /** Comprueba las políticas cada vez que cambia la selección, sin llegar a desplegar. */
   check(): void {
     const model = this.modelId();
     const device = this.deviceId();
@@ -237,6 +247,7 @@ export class DeploymentsComponent implements OnInit {
     this.api.checkDeployment(model, device).subscribe((p) => this.policy.set(p));
   }
 
+  /** Envía la solicitud de despliegue y muestra el resultado. */
   deploy(): void {
     const model = this.modelId();
     const device = this.deviceId();

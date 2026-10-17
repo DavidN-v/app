@@ -1,7 +1,11 @@
 import { Directive, ElementRef, OnDestroy, afterNextRender, effect, inject, input, output } from '@angular/core';
 import { EChartsCoreOption, echarts } from './echarts';
 
-/** <div [egChart]="options" (legendToggle)="…"></div> — gráfica ECharts reactiva a un signal de opciones. */
+/**
+ * Directiva que convierte un elemento en una gráfica de ECharts.
+ * Uso: <div [egChart]="opciones" (legendToggle)="..."></div>
+ * La gráfica se redibuja cuando cambian las opciones y se adapta al tamaño del elemento.
+ */
 @Directive({ selector: '[egChart]' })
 export class ChartDirective implements OnDestroy {
   readonly egChart = input.required<EChartsCoreOption>();

@@ -1,18 +1,21 @@
-"""Migraciones ligeras para instalaciones existentes.
+"""Actualización del esquema en instalaciones que ya tienen datos.
 
-create_all crea tablas nuevas, pero no añade columnas a tablas que ya existen.
-Para este proyecto basta con comprobar las columnas añadidas después del primer despliegue;
-si el esquema crece, conviene pasar a Alembic."""
+SQLAlchemy crea las tablas que no existen, pero no añade columnas nuevas a tablas existentes.
+Como el proyecto solo ha añadido alguna columna suelta, basta con comprobarlas al arrancar.
+Si el esquema creciera mucho, lo adecuado sería usar una herramienta de migraciones como Alembic.
+"""
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
+# Columnas añadidas después de la primera versión: tabla -> {columna: definición SQL}
 ADDED_COLUMNS = {
     "deployments": {"stage": "VARCHAR(16) NOT NULL DEFAULT 'requested'"},
 }
 
 
 def ensure_columns(engine: Engine) -> list[str]:
+    """Añade las columnas que falten y devuelve cuáles se han creado."""
     added = []
     insp = inspect(engine)
     with engine.begin() as conn:

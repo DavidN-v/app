@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RPI5-AGENT · Agente de dispositivos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#15181d; --cell:#1c2027; --line:#313844; --text:#f2f4f7; --muted:#a9b1bd; --dim:#788292;
+          --unit:#34d399; --green:#4af626; --red:#ff2a2a; --sky:#38bdf8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 13px/1.45 'JetBrains Mono', Consolas, monospace; }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.1) 2px 3px); }
+  .screen { border-top: 3px solid var(--unit); min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; font: 900 24px/1 Archivo, 'Arial Black', sans-serif; letter-spacing: -.04em; text-transform: uppercase; }
+  .unit { color: var(--unit); font-size: 11px; letter-spacing: .14em; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+  .cell { background: var(--cell); padding: 14px 18px; }
+  small { display: block; color: var(--dim); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; }
+  .big { font: 900 34px/1 Archivo, sans-serif; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--green); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .ok i { display: inline-block; width: 9px; height: 9px; background: currentColor; margin-right: 8px; animation: blink 1.2s steps(2) infinite; }
+  .ok.down { color: var(--red); }
+  @keyframes blink { 50% { opacity: .15; } }
+  section { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 90px; }
+  .bars span { flex: 1; display: flex; flex-direction: column-reverse; gap: 1px; height: 100%; }
+  .bars i { display: block; background: var(--unit); } .bars i.r { background: var(--sky); }
+  .legend { display: flex; gap: 18px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+  .legend b { font-weight: 500; color: var(--text); }
+  .legend .s::before, .legend .r::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+  .legend .s::before { background: var(--unit); } .legend .r::before { background: var(--sky); }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li { display: grid; grid-template-columns: 90px 130px 70px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  li .d { text-transform: uppercase; } li .z { color: var(--red); }
+  .empty { color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+  li.empty { display: block; border: 0; }
+  footer { margin-top: auto; padding: 10px 18px; color: var(--muted); border-top: 1px solid var(--line); }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } li { grid-template-columns: 70px 1fr; } }
+</style>
+</head>
+<body>
+<div class="screen">
+  <header>
+    <div><div class="unit">UNIT / 03 · RPI5-AGENT</div><h1>Raspberry Pi 5 · Agente de dispositivos</h1></div>
+    <div class="ok" id="link"><i></i><span>Conectado</span></div>
+  </header>
+  <div class="grid">
+    <div class="cell"><small>Tiempo activo</small><div class="big" id="up">—</div></div>
+    <div class="cell"><small>CPU</small><div class="big" id="cpu">—</div></div>
+    <div class="cell"><small>RAM</small><div class="big" id="ram">—</div></div>
+    <div class="cell"><small>Lecturas clasificadas</small><div class="big" id="cls">—</div></div>
+  </div>
+  <section>
+    <small>[ Mensajes MQTT · últimos 60 s ]</small>
+    <div class="bars" id="bars"></div>
+    <div class="legend"><span class="s">Enviados <b id="sent">0</b></span><span class="r">Recibidos <b id="recv">0</b></span></div>
+  </section>
+  <section>
+    <small>[ Anomalías detectadas en la flota ]</small>
+    <ol id="anoms"><li class="empty">// Sin anomalías</li></ol>
+  </section>
+  <footer id="model">—</footer>
+</div>
+<script>
+  const pad = (n) => String(n).padStart(2, '0');
+  const uptime = (s) => `${Math.floor(s / 3600)}h ${pad(Math.floor(s / 60) % 60)}m`;
+  async function tick() {
+    try {
+      const s = await (await fetch('/state', { cache: 'no-store' })).json();
+      const link = document.getElementById('link');
+      link.classList.toggle('down', !s.connected);
+      link.querySelector('span').textContent = s.connected ? 'Conectado' : 'Sin enlace';
+      document.getElementById('up').textContent = uptime(s.uptime_s);
+      document.getElementById('cpu').textContent = s.cpu.toFixed(0) + '%';
+      document.getElementById('ram').textContent = s.ram.toFixed(0) + '%';
+      document.getElementById('cls').textContent = s.classified.toLocaleString('es');
+      const max = Math.max(...s.sent.map((v, i) => v + s.received[i]), 1);
+      document.getElementById('bars').innerHTML = s.sent.map((v, i) =>
+        `<span><i style="height:${v / max * 100}%"></i><i class="r" style="height:${s.received[i] / max * 100}%"></i></span>`).join('');
+      document.getElementById('sent').textContent = s.sent.reduce((a, b) => a + b, 0);
+      document.getElementById('recv').textContent = s.received.reduce((a, b) => a + b, 0);
+      document.getElementById('anoms').innerHTML = s.anomalies.length
+        ? s.anomalies.map((a) => `<li><span>${new Date(a.ts * 1000).toLocaleTimeString('es')}</span><span class="d">${a.device}</span><span>${a.metric}</span><span class="z">${a.value} · z=${a.z}</span></li>`).join('')
+        : '<li class="empty">// Sin anomalías</li>';
+      document.getElementById('model').textContent = 'Modelo: ' + s.model;
+    } catch { /* reiniciando */ }
+  }
+  tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>

@@ -1,3 +1,10 @@
+"""Esquemas de datos de la API.
+
+Definen qué campos se aceptan en cada petición (clases terminadas en In) y qué campos se
+devuelven en cada respuesta (terminadas en Out). Pydantic valida los datos automáticamente:
+si una petición no cumple el esquema, la API responde con un error 422 que indica el campo.
+"""
+
 from datetime import datetime
 from typing import Literal
 
@@ -8,10 +15,14 @@ Framework = Literal["onnx", "gguf", "tflite"]
 
 
 class ORM(BaseModel):
+    """Base para respuestas que se construyen directamente a partir de objetos de la base de datos."""
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class TokenOut(BaseModel):
+    """Respuesta del inicio de sesión."""
+
     access_token: str
     token_type: str = "bearer"
     username: str
@@ -24,6 +35,8 @@ class LoginIn(BaseModel):
 
 
 class ModelBrief(ORM):
+    """Datos mínimos de un modelo, para mostrarlo dentro de otros objetos."""
+
     id: int
     name: str
     version: str
@@ -31,6 +44,7 @@ class ModelBrief(ORM):
 
 
 class DeviceIn(BaseModel):
+    # Identificador en minúsculas, números y guiones: se usa como parte del tema MQTT
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9\-]{1,63}$")
     name: str
     kind: Literal["rpi5", "arduino", "esp32"]
@@ -54,11 +68,14 @@ class DeviceOut(ORM):
 
 
 class ModelIn(BaseModel):
+    """Datos para registrar una versión de un modelo."""
+
     name: str = Field(min_length=2, max_length=128)
     version: str = Field(min_length=1, max_length=32)
     framework: Framework
     task: str
     artifact_uri: str
+    # Resumen SHA-256 en hexadecimal (64 caracteres)
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     signature: str | None = None
     license: str
@@ -84,6 +101,8 @@ class ModelOut(ORM):
 
 
 class TransitionIn(BaseModel):
+    """Cambio de estado de un modelo, con el motivo que queda en la auditoría."""
+
     to: Literal["approved", "retired"]
     reason: str = ""
 
@@ -113,6 +132,8 @@ class PolicyOut(ORM):
 
 
 class PolicyUpdate(BaseModel):
+    """Cambio de una política; los campos que no se envían se dejan como están."""
+
     value: str | None = None
     enabled: bool | None = None
 
@@ -145,6 +166,8 @@ class AuditOut(ORM):
 
 
 class ChainVerification(BaseModel):
+    """Resultado de comprobar la cadena de auditoría."""
+
     valid: bool
     entries: int
     broken_at: int | None = None
