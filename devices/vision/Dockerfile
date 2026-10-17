@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir "onnxruntime>=1.18" "numpy>=1.26" "pillow>=10" /t
  && rm -rf /tmp/edge-agent
 COPY --from=export /export/yolov8n.onnx /models/yolov8n.onnx
 COPY --from=export /scenes /scenes
-COPY devices/vision/detector.py devices/vision/app.py devices/vision/screen.html ./
+COPY devices/vision/detector.py devices/vision/app.py devices/vision/calibrate.py devices/vision/screen.html ./
 RUN useradd --system --uid 10002 device && mkdir -p /data/models && chown -R device /data /scenes
 USER device
 EXPOSE 8101

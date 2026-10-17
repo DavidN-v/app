@@ -84,14 +84,18 @@ services:
   # Dispositivos reales en contenedor: docker compose --profile real up -d
   rpi5-vision:
     profiles: ["real"]
+    cpus: 4
     build:
       context: .
       dockerfile: devices/vision/Dockerfile
     image: edge-governance-rpi5-vision
     environment:
       EDGE_DEVICE_ID: rpi5-vision
+      # Capacidad de una Raspberry Pi 5 de 4 GB: la telemetría mide la placa, no el PC anfitrión
+      EDGE_BOARD_CPUS: "4"
+      EDGE_BOARD_RAM_MB: "4096"
       EDGE_MQTT_HOST: mosquitto
-      VISION_FPS: ${VISION_FPS:-4}
+      VISION_FPS: ${VISION_FPS:-2}
       VISION_DIRTY_EVERY: ${VISION_DIRTY_EVERY:-300}
     volumes: [vision-models:/data/models]
     depends_on: [mosquitto, api]
@@ -100,6 +104,7 @@ services:
   # Modelo de lenguaje real: llama.cpp sirviendo Qwen2.5-0.5B-Instruct (Apache 2.0) en CPU
   genai-llm:
     profiles: ["real"]
+    cpus: 4
     image: ghcr.io/ggml-org/llama.cpp:server
     command:
       - --hf-repo
@@ -114,6 +119,11 @@ services:
       - "4096"
       - --threads
       - "4"
+      # Presupuesto de una Raspberry Pi 5 de 4 GB: la caché de prompts reserva 8 GB por defecto
+      - --cache-ram
+      - "256"
+      - --parallel
+      - "1"
     environment:
       LLAMA_CACHE: /models
     volumes: [llm-models:/models]
@@ -126,22 +136,32 @@ services:
     image: edge-governance-rpi5-genai
     environment:
       EDGE_DEVICE_ID: rpi5-genai
+      # Capacidad de una Raspberry Pi 5 de 4 GB: la telemetría mide la placa, no el PC anfitrión
+      EDGE_BOARD_CPUS: "4"
+      EDGE_BOARD_RAM_MB: "4096"
       EDGE_MQTT_HOST: mosquitto
       LLM_URL: http://genai-llm:8080
       GOV_API_URL: http://api:8000
       GENAI_AUTO_ASK_S: ${GENAI_AUTO_ASK_S:-20}
+    # Comparte el espacio de procesos con llama.cpp: los dos forman la misma placa,
+    # así el consumo del modelo de lenguaje cuenta en la CPU y RAM de rpi5-genai
+    pid: "service:genai-llm"
     depends_on: [mosquitto, api, genai-llm]
     ports: ["8102:8102"]
 
   # Agente real: su propia telemetría + detector de anomalías sobre la telemetría de la flota
   rpi5-agent:
     profiles: ["real"]
+    cpus: 4
     build:
       context: .
       dockerfile: devices/agent/Dockerfile
     image: edge-governance-rpi5-agent
     environment:
       EDGE_DEVICE_ID: rpi5-agent
+      # Capacidad de una Raspberry Pi 5 de 4 GB: la telemetría mide la placa, no el PC anfitrión
+      EDGE_BOARD_CPUS: "4"
+      EDGE_BOARD_RAM_MB: "4096"
       EDGE_MQTT_HOST: mosquitto
     depends_on: [mosquitto, api]
     ports: ["8103:8103"]

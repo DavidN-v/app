@@ -4,6 +4,13 @@ from datetime import timedelta
 from app import jobs
 from app.drift import histogram, psi
 from app.models import Alert, Device, utcnow
+from app.seed import _YOLO_REF_HIST
+
+
+def reference_confidence(rng):
+    """Una confianza con la distribución de referencia medida para yolo 8.1."""
+    i = rng.choices(range(10), weights=_YOLO_REF_HIST)[0]
+    return rng.uniform(i / 10, (i + 1) / 10 - 1e-6)
 
 
 def open_alerts(db, kind):
@@ -138,7 +145,7 @@ def test_in_distribution_does_not_trigger_drift(mqtt, db):
     for _ in range(500):  # misma distribución que la referencia de validación
         mqtt("edge/rpi5-vision/inference",
              {"model": "yolo", "version": "8.1", "latency_ms": 30,
-              "confidence": rng.betavariate(8, 2)})
+              "confidence": reference_confidence(rng)})
     assert jobs.check_drift(db)["rpi5-vision"] < 0.1
     assert open_alerts(db, "drift") == []
 
@@ -201,7 +208,7 @@ def test_drift_alert_resolves_when_distribution_recovers(mqtt, db):
     assert len(open_alerts(db, "drift")) == 1
     for _ in range(500):  # la ventana se llena de nuevo con la distribución de referencia
         mqtt("edge/rpi5-vision/inference",
-             {"model": "yolo", "version": "8.1", "latency_ms": 30, "confidence": rng.betavariate(8, 2)})
+             {"model": "yolo", "version": "8.1", "latency_ms": 30, "confidence": reference_confidence(rng)})
     jobs.check_drift(db)
     assert open_alerts(db, "drift") == []
 
