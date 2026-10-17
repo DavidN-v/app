@@ -1,0 +1,8 @@
+[wokwi]
+version = 1
+firmware = '.pio/build/wokwi/firmware.bin'
+elf = '.pio/build/wokwi/firmware.elf'
+
+[net]
+# Gateway privado: el ESP32 simulado alcanza el Mosquitto del host en host.wokwi.internal:1883
+gateway = true
