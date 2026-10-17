@@ -1,9 +1,12 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { LiveService } from '../core/live.service';
+import { NotifyService } from '../core/notify.service';
+import { PolicyStore } from '../core/policy.store';
+import { ToastHostComponent } from '../shared/toast-host.component';
 import { Role } from '../core/models';
 
 interface NavItem {
@@ -21,7 +24,7 @@ const ROLE_LABEL: Record<Role, string> = {
 
 @Component({
   selector: 'eg-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastHostComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.component.html',
 })
@@ -29,7 +32,12 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly auth = inject(AuthService);
   protected readonly live = inject(LiveService);
   private readonly router = inject(Router);
+  protected readonly notify = inject(NotifyService);
+  private readonly policies = inject(PolicyStore);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly menuOpen = signal(false);
+  protected readonly clock = signal(this.utc());
+  private clockTimer?: ReturnType<typeof setInterval>;
 
   protected readonly nav: NavItem[] = [
     { path: '/', label: 'Vista general' },
@@ -62,10 +70,19 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.live.start();
+    this.notify.start(this.destroyRef);
+    this.policies.ensureLoaded();
+    this.clockTimer = setInterval(() => this.clock.set(this.utc()), 1000);
   }
 
   ngOnDestroy(): void {
     this.live.stop();
+    this.notify.stop();
+    clearInterval(this.clockTimer);
+  }
+
+  private utc(): string {
+    return new Date().toISOString().slice(11, 19);
   }
 
   protected visible(item: NavItem): boolean {

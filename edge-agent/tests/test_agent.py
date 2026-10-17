@@ -85,6 +85,22 @@ def test_agent_acks_successful_deploy(tmp_path, artifact):
     assert json.loads(payload)["status"] == "succeeded"
 
 
+def test_agent_reports_each_stage(tmp_path, artifact):
+    client = FakeClient()
+    agent = EdgeAgent("rpi5-vision", client, ModelStore(tmp_path / "m"))
+    agent.handle_deploy(json.dumps(command(artifact)).encode())
+    stages = [json.loads(p)["stage"] for t, p, *_ in client.messages if t.endswith("/deploy/progress")]
+    assert stages == ["downloading", "verifying", "installing"]
+
+
+def test_hash_failure_stops_before_installing(tmp_path, artifact):
+    client = FakeClient()
+    agent = EdgeAgent("rpi5-vision", client, ModelStore(tmp_path / "m"))
+    agent.handle_deploy(json.dumps(command(artifact, sha="f" * 64)).encode())
+    stages = [json.loads(p)["stage"] for t, p, *_ in client.messages if t.endswith("/deploy/progress")]
+    assert stages == ["downloading", "verifying"]
+
+
 def test_agent_acks_failed_deploy(tmp_path, artifact):
     client = FakeClient()
     agent = EdgeAgent("rpi5-vision", client, ModelStore(tmp_path / "m"))

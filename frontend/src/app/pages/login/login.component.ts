@@ -11,25 +11,33 @@ import { describeError } from '../../shared/errors';
   template: `
     <div class="login-page">
       <section class="login-intro">
-        <span class="login-name">Edge Governance</span>
+        <div class="login-top"><span>Nodo EDGE-GOV-01</span><span>Rev 1.0 · Acceso restringido</span></div>
         <div>
-          <h1>Tus modelos en el edge, bajo control</h1>
-          <p>
-            Telemetría en vivo de cada placa, aprobación de versiones y despliegues que solo pasan si
-            cumplen las políticas.
-          </p>
-          <ul class="login-facts">
-            <li>Latencia, temperatura y drift de cada dispositivo en tiempo real.</li>
-            <li>Ningún modelo se despliega sin firma, licencia válida y aprobación de otra persona.</li>
-            <li>Cada acción queda en un registro de auditoría que no se puede alterar.</li>
-          </ul>
+          <h1 class="login-mark" aria-label="Edge Gov">
+            <span>Edge<span class="slash">/</span></span>
+            <span>Gov</span>
+          </h1>
         </div>
-        <span class="muted small">Raspberry Pi · Arduino · ESP32</span>
+        <div>
+          <p class="login-lede">
+            Gobernanza y observabilidad de modelos de IA en el edge. Telemetría en vivo de cada placa,
+            versiones aprobadas por otra persona y despliegues que solo salen si cumplen las políticas.
+          </p>
+          <ol class="bootlog" aria-hidden="true">
+            <li><b>mqtt</b> conectando a edge/# ......... <span class="okk">OK</span></li>
+            <li><b>registro</b> modelos firmados ......... <span class="okk">OK</span></li>
+            <li><b>políticas</b> firma · licencia · hardware <span class="okk">OK</span></li>
+            <li><b>auditoría</b> cadena sha-256 íntegra ... <span class="okk">OK</span></li>
+            <li><b>drift</b> monitor psi activo ......... <span class="okk">OK</span></li>
+            <li><b>sesión</b> esperando credenciales_</li>
+          </ol>
+        </div>
+        <div class="login-bottom"><span>Raspberry Pi · Arduino · ESP32</span><span>© Edge Governance</span></div>
       </section>
 
       <main class="login-panel">
         <form class="login-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-          <h2>Entrar a la consola</h2>
+          <h2>Identificación de operador</h2>
           <label>
             Usuario
             <input formControlName="username" autocomplete="username" [attr.aria-invalid]="invalid('username')" />
@@ -53,7 +61,7 @@ import { describeError } from '../../shared/errors';
             <p class="form-error" role="alert">{{ error() }}</p>
           }
           <button class="btn btn-primary" type="submit" [disabled]="loading()">
-            {{ loading() ? 'Entrando…' : 'Entrar' }}
+            {{ loading() ? 'Verificando…' : 'Entrar >>>' }}
           </button>
           <p class="login-hint">
             Demo: admin, approver, operator o viewer. La contraseña es el usuario seguido de 123.

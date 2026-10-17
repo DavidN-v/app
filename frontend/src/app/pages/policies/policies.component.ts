@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { Policy } from '../../core/models';
+import { PolicyStore } from '../../core/policy.store';
 import { describeError } from '../../shared/errors';
+import { ToastService } from '../../shared/toast.service';
 
 @Component({
   selector: 'eg-policies',
@@ -54,6 +56,8 @@ import { describeError } from '../../shared/errors';
 export class PoliciesComponent implements OnInit {
   private readonly api = inject(ApiService);
   protected readonly auth = inject(AuthService);
+  private readonly toast = inject(ToastService);
+  private readonly store = inject(PolicyStore);
   protected readonly policies = signal<Policy[]>([]);
   protected readonly message = signal('');
   protected readonly isError = signal(false);
@@ -62,16 +66,30 @@ export class PoliciesComponent implements OnInit {
     this.api.policies().subscribe((p) => this.policies.set(p));
   }
 
-  save(policy: Policy, patch: Partial<Pick<Policy, 'value' | 'enabled'>>): void {
+  save(policy: Policy, patch: Partial<Pick<Policy, 'value' | 'enabled'>>, undo = false): void {
+    if (patch.value !== undefined && patch.value === policy.value && patch.enabled === undefined) return;
+    const before = { value: policy.value, enabled: policy.enabled };
     this.api.updatePolicy(policy.key, patch).subscribe({
       next: (updated) => {
         this.policies.update((list) => list.map((p) => (p.key === updated.key ? updated : p)));
-        this.isError.set(false);
-        this.message.set(`Política ${updated.key} actualizada (registrada en auditoría)`);
+        this.store.upsert(updated);
+        this.message.set('');
+        if (undo) {
+          this.toast.show('info', `Política ${updated.key} restaurada`);
+          return;
+        }
+        const what = patch.enabled !== undefined
+          ? (updated.enabled ? 'activada' : 'desactivada')
+          : `${before.value} → ${updated.value}`;
+        this.toast.ok(`Política ${updated.key} guardada`, `${what}. Se aplica ya a la telemetría y a los despliegues.`, {
+          label: 'Deshacer',
+          run: () => this.save(updated, before, true),
+        });
       },
       error: (err) => {
         this.isError.set(true);
         this.message.set(describeError(err).message);
+        this.toast.error(`No se pudo guardar ${policy.key}`, describeError(err).message);
       },
     });
   }

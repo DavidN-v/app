@@ -1,8 +1,9 @@
 <a class="skip-link" href="#main">Saltar al contenido</a>
+<div class="scanbeam" aria-hidden="true"></div>
 <div class="shell" [class.menu-open]="menuOpen()">
   <aside class="sidebar" aria-label="Navegación principal">
     <div class="brand">
-      <strong>Edge Governance</strong>
+      <strong>EDGE<span class="slash">/</span>GOV<span class="reg">®</span></strong>
       <small>Gobernanza de modelos</small>
     </div>
     <nav>
@@ -14,11 +15,19 @@
             [routerLinkActiveOptions]="{ exact: item.path === '/' }"
             ariaCurrentWhenActive="page"
             (click)="menuOpen.set(false)"
-            >{{ item.label }}</a
-          >
+            >{{ item.label }}
+            @if (item.path === '/alerts' && notify.openAlerts() > 0) {
+              <span class="nav-count" [attr.aria-label]="notify.openAlerts() + ' alertas abiertas'">{{ notify.openAlerts() }}</span>
+            }
+          </a>
         }
       }
     </nav>
+    <div class="sidebar-meta" aria-hidden="true">
+      <div>Nodo EDGE-GOV-01 · Rev 1.0</div>
+      <div>MQTT edge/# · QoS 1</div>
+      <div class="barcode"></div>
+    </div>
     <div class="sidebar-foot">
       <div>
         <strong>{{ auth.user()?.username }}</strong>
@@ -31,7 +40,7 @@
   <div class="main">
     <header class="topbar">
       <button
-        class="btn btn-ghost menu-toggle"
+        class="btn btn-sm menu-toggle"
         (click)="menuOpen.set(!menuOpen())"
         [attr.aria-expanded]="menuOpen()"
         aria-label="Abrir menú"
@@ -40,10 +49,24 @@
       </button>
       <h1>{{ pageTitle() }}</h1>
       <div class="topbar-right">
-        <span class="live-pill" [class.off]="!live.connected()" role="status">
-          <i aria-hidden="true"></i>{{ live.connected() ? 'Datos en vivo' : 'Reconectando…' }}
-        </span>
-        <span class="tnum hide-sm">{{ live.messagesPerSecond() }} mensajes/s</span>
+        <div class="telemetry" role="status">
+          Enlace
+          <b class="live-pill" [class.off]="!live.connected()"><i aria-hidden="true"></i>{{ live.connected() ? 'En vivo' : 'Caído' }}</b>
+        </div>
+        <div class="telemetry hide-sm">
+          Flujo
+          <b>{{ live.messagesPerSecond().toString().padStart(3, '0') }} msg/s</b>
+        </div>
+        @if (notify.browserSupported) {
+          <button class="telemetry telemetry-btn hide-sm" (click)="notify.toggleBrowser()" [attr.aria-pressed]="notify.browserEnabled()">
+            Avisos
+            <b [class.on]="notify.browserEnabled()">{{ notify.browserEnabled() ? 'Activos' : 'Activar' }}</b>
+          </button>
+        }
+        <div class="telemetry hide-sm">
+          UTC
+          <b>{{ clock() }}</b>
+        </div>
       </div>
     </header>
     <main class="content" id="main" tabindex="-1">
@@ -51,3 +74,4 @@
     </main>
   </div>
 </div>
+<eg-toasts />

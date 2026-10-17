@@ -5,9 +5,12 @@ import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { MLModel, ModelStatus } from '../../core/models';
 import { describeError } from '../../shared/errors';
+import { SortState, matchesQuery } from '../../shared/sort';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
+import { ToastService, UNDO_WINDOW_MS } from '../../shared/toast.service';
 
 type Filter = ModelStatus | 'all';
+type ModelKey = 'name' | 'framework' | 'license' | 'owner' | 'status' | 'created';
 
 @Component({
   selector: 'eg-models',
@@ -18,6 +21,12 @@ type Filter = ModelStatus | 'all';
 export class ModelsComponent implements OnInit {
   private readonly api = inject(ApiService);
   protected readonly auth = inject(AuthService);
+  private readonly toast = inject(ToastService);
+  private readonly undoMs = inject(UNDO_WINDOW_MS);
+  protected readonly query = signal('');
+  protected readonly sort = new SortState<ModelKey>();
+  /** Modelos con una retirada en cuenta atrás (se puede deshacer) */
+  protected readonly retiringSoon = signal<ReadonlySet<number>>(new Set());
 
   protected readonly models = signal<MLModel[]>([]);
   protected readonly filter = signal<Filter>('all');
@@ -39,7 +48,18 @@ export class ModelsComponent implements OnInit {
 
   protected readonly visible = computed(() => {
     const f = this.filter();
-    return f === 'all' ? this.models() : this.models().filter((m) => m.status === f);
+    const q = this.query();
+    const list = this.models().filter(
+      (m) => (f === 'all' || m.status === f) && matchesQuery(q, m.name, m.version, m.license, m.owner, m.task, m.framework),
+    );
+    return this.sort.apply(list, {
+      name: (m) => `${m.name} ${m.version}`,
+      framework: (m) => m.framework,
+      license: (m) => m.license,
+      owner: (m) => m.owner,
+      status: (m) => m.status,
+      created: (m) => m.created_at,
+    });
   });
   protected readonly counts = computed(() => {
     const c: Record<string, number> = { all: this.models().length };
@@ -92,11 +112,32 @@ export class ModelsComponent implements OnInit {
     this.retiring.set(m);
   }
 
+  /** La retirada es irreversible: se envía tras unos segundos en los que se puede deshacer. */
   confirmRetire(m: MLModel): void {
     const reason = this.retireReason().trim();
     if (!reason) return;
-    this.transition(m, 'retired', reason);
     this.retiring.set(null);
+    this.retiringSoon.update((s) => new Set(s).add(m.id));
+    const clear = () => this.retiringSoon.update((s) => {
+      const next = new Set(s);
+      next.delete(m.id);
+      return next;
+    });
+    this.toast.withUndo(
+      `Retirando ${m.name} v${m.version}`,
+      () => {
+        clear();
+        this.transition(m, 'retired', reason);
+      },
+      {
+        detail: 'Dejará de poder desplegarse. Tienes unos segundos para deshacerlo.',
+        windowMs: this.undoMs,
+        onUndo: () => {
+          clear();
+          this.toast.show('info', `Retirada de ${m.name} v${m.version} cancelada`);
+        },
+      },
+    );
   }
 
   transition(m: MLModel, to: 'approved' | 'retired', reason = 'Aprobado desde la consola'): void {
@@ -104,11 +145,17 @@ export class ModelsComponent implements OnInit {
     this.api.transitionModel(m.id, to, reason).subscribe({
       next: () => {
         this.busy.set(false);
+        this.toast.ok(
+          to === 'approved' ? `${m.name} v${m.version} aprobado` : `${m.name} v${m.version} retirado`,
+          to === 'approved' ? 'Ya se puede desplegar. Quedó registrado en la auditoría.' : 'Quedó registrado en la auditoría.',
+        );
         this.load();
       },
       error: (err) => {
         this.busy.set(false);
-        this.error.set(describeError(err).message);
+        const msg = describeError(err).message;
+        this.error.set(msg);
+        this.toast.error(to === 'approved' ? 'No se pudo aprobar' : 'No se pudo retirar', msg);
       },
     });
   }
@@ -119,16 +166,18 @@ export class ModelsComponent implements OnInit {
     this.busy.set(true);
     this.error.set('');
     this.api.registerModel({ ...value, signature: value.signature || null }).subscribe({
-      next: () => {
+      next: (created) => {
         this.busy.set(false);
         this.showForm.set(false);
         this.form.reset();
+        this.toast.ok(`${created.name} v${created.version} registrado`, 'Queda como borrador hasta que otra persona lo apruebe.');
         this.load();
       },
       error: (err) => {
         this.busy.set(false);
         const e = describeError(err);
         this.error.set([e.message, ...e.violations].join(' · '));
+        this.toast.error('No se pudo registrar el modelo', e.violations[0] ?? e.message);
       },
     });
   }

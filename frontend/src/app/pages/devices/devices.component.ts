@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { ApiService } from '../../core/api.service';
 import { LiveService } from '../../core/live.service';
 import { Device } from '../../core/models';
+import { MetricComponent } from '../../shared/metric.component';
 import { colorFor } from '../../shared/palette';
+import { SortState } from '../../shared/sort';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { TimeAgoPipe } from '../../shared/time-ago.pipe';
 
@@ -14,7 +16,7 @@ const KIND_LABEL: Record<Device['kind'], string> = {
 
 @Component({
   selector: 'eg-devices',
-  imports: [StatusBadgeComponent, TimeAgoPipe],
+  imports: [StatusBadgeComponent, TimeAgoPipe, MetricComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page-head">
@@ -28,9 +30,14 @@ const KIND_LABEL: Record<Device['kind'], string> = {
         <table class="table">
           <thead>
             <tr>
-              <th>Dispositivo</th><th>Hardware</th><th>Función</th><th>Modelo activo</th>
-              <th class="num">CPU</th><th class="num">RAM</th><th class="num">Temp.</th>
-              <th class="num">Latencia</th><th>Último dato</th><th>Estado</th>
+              <th [attr.aria-sort]="sort.ariaSort('name')"><button class="th-sort" (click)="sort.toggle('name')">Dispositivo {{ sort.indicator('name') }}</button></th>
+              <th>Hardware</th><th>Función</th><th>Modelo activo</th>
+              <th class="num" [attr.aria-sort]="sort.ariaSort('cpu')"><button class="th-sort" (click)="sort.toggle('cpu')">CPU {{ sort.indicator('cpu') }}</button></th>
+              <th class="num" [attr.aria-sort]="sort.ariaSort('ram')"><button class="th-sort" (click)="sort.toggle('ram')">RAM {{ sort.indicator('ram') }}</button></th>
+              <th class="num" [attr.aria-sort]="sort.ariaSort('temp')"><button class="th-sort" (click)="sort.toggle('temp')">Temp. {{ sort.indicator('temp') }}</button></th>
+              <th class="num" [attr.aria-sort]="sort.ariaSort('latency')"><button class="th-sort" (click)="sort.toggle('latency')">Latencia {{ sort.indicator('latency') }}</button></th>
+              <th>Último dato</th>
+              <th [attr.aria-sort]="sort.ariaSort('status')"><button class="th-sort" (click)="sort.toggle('status')">Estado {{ sort.indicator('status') }}</button></th>
             </tr>
           </thead>
           <tbody>
@@ -40,7 +47,7 @@ const KIND_LABEL: Record<Device['kind'], string> = {
             }
           }
             @for (d of filtered(); track d.id) {
-              <tr>
+              <tr [class.focused]="focus() === d.id" [attr.id]="'unit-' + d.id">
                 <td>
                   <span class="swatch" [style.background]="colorFor(d.id)"></span>
                   <strong>{{ d.name }}</strong>
@@ -51,10 +58,10 @@ const KIND_LABEL: Record<Device['kind'], string> = {
                 <td>
                   {{ d.current_model ? d.current_model.name + ' v' + d.current_model.version : '—' }}
                 </td>
-                <td class="num">{{ fmt(d.cpu, '%') }}</td>
-                <td class="num">{{ fmt(d.ram, '%') }}</td>
-                <td class="num" [class.red]="(d.temp ?? 0) > 75">{{ fmt(d.temp, ' °C') }}</td>
-                <td class="num">{{ fmt(d.latency_ms, ' ms') }}</td>
+                <td class="num"><eg-metric metric="cpu" [value]="d.cpu" /></td>
+                <td class="num"><eg-metric metric="ram" [value]="d.ram" /></td>
+                <td class="num"><eg-metric metric="temp" [value]="d.temp" /></td>
+                <td class="num"><eg-metric metric="latency" [value]="d.latency_ms" /></td>
                 <td class="muted">{{ d.last_seen | timeAgo }}</td>
                 <td><eg-status [status]="d.status" /></td>
               </tr>
@@ -73,6 +80,9 @@ export class DevicesComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly live = inject(LiveService);
   private readonly base = signal<Device[]>([]);
+  /** ?focus=id desde el registro en vivo: resalta y lleva a esa unidad */
+  readonly focus = input<string | undefined>();
+  protected readonly sort = new SortState<'name' | 'cpu' | 'ram' | 'temp' | 'latency' | 'status'>();
   protected readonly query = signal('');
   protected readonly loaded = signal(false);
   protected readonly skeletonRows = [1, 2, 3, 4, 5];
@@ -82,15 +92,25 @@ export class DevicesComponent implements OnInit {
   protected readonly filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
     const devices = this.live.merge(this.base());
-    return q
+    const list = q
       ? devices.filter((d) => [d.id, d.name, d.role, d.kind].some((f) => f.toLowerCase().includes(q)))
       : devices;
+    return this.sort.apply(list, {
+      name: (d) => d.name,
+      cpu: (d) => d.cpu,
+      ram: (d) => d.ram,
+      temp: (d) => d.temp,
+      latency: (d) => d.latency_ms,
+      status: (d) => d.status,
+    });
   });
 
   ngOnInit(): void {
     this.api.devices().subscribe((d) => {
       this.base.set(d);
       this.loaded.set(true);
+      const focus = this.focus();
+      if (focus) setTimeout(() => document.getElementById('unit-' + focus)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
     });
   }
 

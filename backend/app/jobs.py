@@ -3,16 +3,17 @@
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, timedelta
+import time
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from . import drift, policies, prom
+from . import audit, drift, policies, prom
 from .alerting import raise_alert
 from .config import get_settings
 from .db import SessionLocal
 from .hub import hub
-from .models import Device, utcnow
+from .models import Deployment, Device, LatencyMinute, utcnow
 
 log = logging.getLogger(__name__)
 MIN_DRIFT_SAMPLES = 50
@@ -57,6 +58,37 @@ def check_drift(db: Session) -> dict[str, float]:
     return results
 
 
+def flush_latency(db: Session, now: float | None = None) -> int:
+    """Guarda en la base de datos los minutos de latencia ya cerrados."""
+    rows = hub.drain_buckets(now if now is not None else time.time())
+    for device_id, minute, avg, peak, count in rows:
+        db.add(LatencyMinute(device_id=device_id, minute=datetime.fromtimestamp(minute, UTC),
+                             avg=round(avg, 2), max=round(peak, 2), count=count))
+    db.commit()
+    return len(rows)
+
+
+def check_deploy_timeouts(db: Session) -> list[int]:
+    """Un despliegue sin confirmación dentro del plazo de la política se da por fallido."""
+    timeout = policies.load(db).number("deploy_timeout_s", 120)
+    cutoff = utcnow() - timedelta(seconds=timeout)
+    expired = []
+    for dep in db.query(Deployment).filter_by(status="pending"):
+        created = dep.created_at if dep.created_at.tzinfo else dep.created_at.replace(tzinfo=UTC)
+        if created < cutoff:
+            dep.message = f"Sin confirmación del dispositivo en {timeout:g} s (última etapa: {dep.stage})"
+            dep.status, dep.stage, dep.finished_at = "failed", "failed", utcnow()
+            raise_alert(db, dep.device_id, "deployment_failed", "critical",
+                        f"Despliegue de {dep.model.name} v{dep.model.version} en {dep.device_id} "
+                        f"sin respuesta tras {timeout:g} s")
+            audit.record(db, "system", "deployment.timeout", "deployment", dep.id, {"timeout_s": timeout})
+            hub.broadcast({"type": "deployment",
+                           "data": {"id": dep.id, "status": "failed", "stage": "failed"}})
+            expired.append(dep.id)
+    db.commit()
+    return expired
+
+
 async def run_forever(stop: asyncio.Event) -> None:
     settings = get_settings()
     ticks = 0
@@ -64,6 +96,8 @@ async def run_forever(stop: asyncio.Event) -> None:
         try:
             with SessionLocal() as db:
                 await asyncio.to_thread(check_heartbeats, db)
+                await asyncio.to_thread(check_deploy_timeouts, db)
+                await asyncio.to_thread(flush_latency, db)
                 if ticks % max(1, settings.drift_interval_s // 5) == 0:
                     await asyncio.to_thread(check_drift, db)
         except Exception:

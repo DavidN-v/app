@@ -49,11 +49,14 @@ export type NewModel = Pick<
   'name' | 'version' | 'framework' | 'task' | 'artifact_uri' | 'sha256' | 'signature' | 'license'
 > & { metrics?: Record<string, unknown> };
 
+export type DeployStage = 'requested' | 'downloading' | 'verifying' | 'installing' | 'confirmed' | 'failed';
+
 export interface Deployment {
   id: number;
   model: ModelBrief;
   device_id: string;
   status: 'pending' | 'succeeded' | 'failed';
+  stage: DeployStage;
   requested_by: string;
   message: string;
   created_at: string;
@@ -101,6 +104,13 @@ export interface ChainVerification {
   broken_at: number | null;
 }
 
+export type LatencyWindow = '5m' | '1h' | '24h';
+
+export interface LatencyHistory {
+  window: LatencyWindow;
+  series: Record<string, Point[]>;
+}
+
 /** [timestamp en segundos, valor] */
 export type Point = [number, number];
 
@@ -118,5 +128,5 @@ export type LiveEvent =
   | { type: 'inference'; data: { id: string; latency_ms: number; confidence: number | null; model: string } }
   | { type: 'device_status'; data: { id: string; status: 'online' | 'offline' } }
   | { type: 'alert'; data: Alert }
-  | { type: 'deployment'; data: { id: number; status: Deployment['status'] } }
+  | { type: 'deployment'; data: { id: number; status: Deployment['status']; stage?: DeployStage } }
   | { type: 'ping' };

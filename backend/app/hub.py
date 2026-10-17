@@ -9,7 +9,7 @@ import time
 from collections import defaultdict, deque
 from typing import Any
 
-SERIES_LEN = 300  # puntos por dispositivo (~5 min a 1 Hz)
+SERIES_LEN = 1200  # puntos por dispositivo (10 min a 2 Hz)
 CONFIDENCE_LEN = 500
 
 
@@ -21,6 +21,8 @@ class LiveHub:
         self.latency: dict[str, deque] = defaultdict(lambda: deque(maxlen=SERIES_LEN))
         self.confidence: dict[str, deque] = defaultdict(lambda: deque(maxlen=CONFIDENCE_LEN))
         self.mqtt_rx: dict[str, int] = defaultdict(int)
+        # (device_id, minuto epoch) -> [suma, cuenta, máximo]
+        self._buckets: dict[tuple[str, int], list[float]] = {}
 
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -36,8 +38,27 @@ class LiveHub:
             self._subscribers.discard(q)
 
     def record_latency(self, device_id: str, value: float, ts: float | None = None) -> None:
+        ts = ts or time.time()
         with self._lock:
-            self.latency[device_id].append((ts or time.time(), value))
+            self.latency[device_id].append((ts, value))
+            b = self._buckets.setdefault((device_id, int(ts // 60) * 60), [0.0, 0, value])
+            b[0] += value
+            b[1] += 1
+            b[2] = max(b[2], value)
+
+    def drain_buckets(self, before: float) -> list[tuple[str, int, float, float, int]]:
+        """Entrega los minutos ya cerrados (anteriores a `before`) para guardarlos."""
+        with self._lock:
+            done = [k for k in self._buckets if k[1] + 60 <= before]
+            out = []
+            for key in done:
+                total, count, peak = self._buckets.pop(key)
+                out.append((key[0], key[1], total / count, peak, int(count)))
+            return out
+
+    def open_buckets(self) -> list[tuple[str, int, float, float, int]]:
+        with self._lock:
+            return [(k[0], k[1], v[0] / v[1], v[2], int(v[1])) for k, v in self._buckets.items() if v[1]]
 
     def record_confidence(self, device_id: str, value: float) -> None:
         with self._lock:

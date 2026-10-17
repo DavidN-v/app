@@ -98,6 +98,7 @@ class DeploymentOut(ORM):
     model: ModelBrief
     device_id: str
     status: str
+    stage: str
     requested_by: str
     message: str
     created_at: datetime

@@ -73,6 +73,8 @@ class Deployment(Base):
     model_id: Mapped[int] = mapped_column(ForeignKey("models.id"))
     device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"))
     status: Mapped[str] = mapped_column(String(16), default="pending")
+    # requested -> downloading -> verifying -> installing -> confirmed | failed
+    stage: Mapped[str] = mapped_column(String(16), default="requested")
     requested_by: Mapped[str] = mapped_column(String(64))
     message: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -113,3 +115,15 @@ class AuditEntry(Base):
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     prev_hash: Mapped[str] = mapped_column(String(64))
     hash: Mapped[str] = mapped_column(String(64), unique=True)
+
+
+class LatencyMinute(Base):
+    """Latencia agregada por minuto y dispositivo: historial para 1 h y 24 h que sobrevive a recargas."""
+    __tablename__ = "latency_minutes"
+    __table_args__ = (UniqueConstraint("device_id", "minute"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(64), index=True)
+    minute: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    avg: Mapped[float] = mapped_column(Float)
+    max: Mapped[float] = mapped_column(Float)
+    count: Mapped[int] = mapped_column(Integer)

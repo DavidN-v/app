@@ -70,7 +70,10 @@ class EdgeAgent:
         except (ValueError, KeyError) as exc:
             log.error("Orden de despliegue inválida: %s", exc)
             return {}
-        result = self.store.install(command)
+        def progress(stage: str) -> None:
+            self.publish("deploy/progress", {"deployment_id": deployment_id, "stage": stage}, qos=1)
+
+        result = self.store.install(command, progress=progress)
         ack = {"deployment_id": deployment_id,
                "status": "succeeded" if result.ok else "failed",
                "message": result.message}

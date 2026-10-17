@@ -56,7 +56,7 @@ class ModelStore:
         tmp.write_text(json.dumps(manifest, indent=2))
         os.replace(tmp, self.manifest_path)
 
-    def install(self, command: dict, downloader=_download) -> InstallResult:
+    def install(self, command: dict, downloader=_download, progress=lambda stage: None) -> InstallResult:
         name, version = command["model"], command["version"]
         expected = command["sha256"].lower()
         target = self.root / f"{name}-{version}.{command.get('framework', 'bin')}"
@@ -65,11 +65,14 @@ class ModelStore:
         os.close(fd)
         tmp = Path(tmp_name)
         try:
+            progress("downloading")
             downloader(command["url"], tmp)
+            progress("verifying")
             actual = sha256_of(tmp)
             if actual != expected:
                 return InstallResult(False, f"sha256 no coincide: esperado {expected[:12]}…, "
                                             f"obtenido {actual[:12]}…")
+            progress("installing")
             os.replace(tmp, target)
         except Exception as exc:  # red, disco, URL inválida…
             return InstallResult(False, f"Error de instalación: {exc}")

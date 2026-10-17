@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { AuthService } from './auth.service';
 import { Alert, Device, LiveEvent, Point } from './models';
 
-export const SERIES_WINDOW = 180; // puntos visibles por dispositivo
+export const SERIES_WINDOW = 600; // puntos por dispositivo (5 min a 2 Hz)
 const MAX_FEED = 50;
 const MAX_BACKOFF_MS = 15_000;
 

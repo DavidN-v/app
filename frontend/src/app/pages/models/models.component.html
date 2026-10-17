@@ -44,6 +44,7 @@
   </form>
 }
 
+<div class="toolbar">
 <div class="tabs">
   @for (f of filters; track f.key) {
     <button class="tab" [class.active]="filter() === f.key" (click)="filter.set(f.key)">
@@ -51,13 +52,23 @@
     </button>
   }
 </div>
+<input class="search" type="search" placeholder="Buscar nombre, versión, licencia…" aria-label="Buscar modelos"
+  [value]="query()" (input)="query.set($any($event.target).value)" />
+</div>
 
 <div class="grid grid-detail">
   <div class="card">
     <div class="table-wrap">
       <table class="table table-hover">
         <thead>
-          <tr><th>Modelo</th><th>Formato</th><th>Licencia</th><th>Propietario</th><th>Estado</th><th></th></tr>
+          <tr>
+            <th [attr.aria-sort]="sort.ariaSort('name')"><button class="th-sort" (click)="sort.toggle('name')">Modelo {{ sort.indicator('name') }}</button></th>
+            <th [attr.aria-sort]="sort.ariaSort('framework')"><button class="th-sort" (click)="sort.toggle('framework')">Formato {{ sort.indicator('framework') }}</button></th>
+            <th [attr.aria-sort]="sort.ariaSort('license')"><button class="th-sort" (click)="sort.toggle('license')">Licencia {{ sort.indicator('license') }}</button></th>
+            <th [attr.aria-sort]="sort.ariaSort('owner')"><button class="th-sort" (click)="sort.toggle('owner')">Propietario {{ sort.indicator('owner') }}</button></th>
+            <th [attr.aria-sort]="sort.ariaSort('status')"><button class="th-sort" (click)="sort.toggle('status')">Estado {{ sort.indicator('status') }}</button></th>
+            <th></th>
+          </tr>
         </thead>
         <tbody>
           @if (!loaded()) {
@@ -82,14 +93,16 @@
                 @if (canApprove(m)) {
                   <button class="btn btn-sm btn-success" [disabled]="busy()" (click)="transition(m, 'approved')">Aprobar</button>
                 }
-                @if (canRetire(m)) {
+                @if (retiringSoon().has(m.id)) {
+                  <span class="pending-tag">Retirando…</span>
+                } @else if (canRetire(m)) {
                   <button class="btn btn-sm btn-ghost" [disabled]="busy()" (click)="startRetire(m)">Retirar</button>
                 }
               </td>
             </tr>
           } @empty {
             @if (loaded()) {
-              <tr><td colspan="6" class="empty">No hay modelos en este estado.</td></tr>
+              <tr><td colspan="6" class="empty">{{ query() ? 'Ningún modelo coincide con la búsqueda' : 'No hay modelos en este estado' }}</td></tr>
             }
           }
         </tbody>

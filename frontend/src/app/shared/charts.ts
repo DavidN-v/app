@@ -2,32 +2,78 @@ import { Point } from '../core/models';
 import { EChartsCoreOption } from './echarts';
 import { CHART_GRID, CHART_TEXT, colorFor } from './palette';
 
-export function latencyChart(series: Record<string, Point[]>, names: Record<string, string> = {}): EChartsCoreOption {
+const MONO = 'JetBrains Mono, Consolas, monospace';
+const RED = '#ff2a2a';
+
+export interface LatencyChartOpts {
+  /** Nombres de serie ocultos (por clic en la leyenda o por aislar un dispositivo) */
+  hidden?: ReadonlySet<string>;
+  /** Umbral de la política max_latency_ms */
+  threshold?: number;
+}
+
+export function latencyChart(
+  series: Record<string, Point[]>,
+  names: Record<string, string> = {},
+  opts: LatencyChartOpts = {},
+): EChartsCoreOption {
+  const ids = Object.keys(series);
+  const label = (id: string) => names[id] ?? id;
+  const hidden = opts.hidden ?? new Set<string>();
+  const threshold = opts.threshold ?? 100;
   return {
     animation: false,
-    grid: { left: 8, right: 16, top: 64, bottom: 8, containLabel: true },
-    legend: { top: 0, textStyle: { color: CHART_TEXT, fontFamily: 'Geist, system-ui' }, icon: 'rect', itemWidth: 10, itemHeight: 10 },
-    tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${v?.toFixed?.(1) ?? v} ms` },
+    textStyle: { fontFamily: MONO },
+    grid: { left: 8, right: 12, top: 52, bottom: 6, containLabel: true },
+    legend: {
+      data: ids.map(label),
+      // El estado de la leyenda lo decide la consola, así aislar y ocultar no se pisan
+      selected: Object.fromEntries(ids.map((id) => [label(id), !hidden.has(label(id))])),
+      top: 0, left: 0, icon: 'rect', itemWidth: 14, itemHeight: 3, itemGap: 14,
+      textStyle: { color: '#a9b1bd', fontFamily: MONO, fontSize: 10 },
+      inactiveColor: '#46505f',
+    },
+    tooltip: {
+      trigger: 'axis', backgroundColor: '#15181d', borderColor: '#46505f', borderRadius: 0,
+      textStyle: { color: '#f2f4f7', fontFamily: MONO, fontSize: 11 },
+      axisPointer: { type: 'line', lineStyle: { color: RED, width: 1 } },
+      valueFormatter: (v: number) => `${v?.toFixed?.(1) ?? v} ms`,
+    },
     xAxis: {
       type: 'time',
-      axisLabel: { color: CHART_TEXT },
-      axisLine: { lineStyle: { color: CHART_GRID } },
-      splitLine: { show: false },
+      axisLabel: { color: CHART_TEXT, fontFamily: MONO, fontSize: 10, hideOverlap: true },
+      axisLine: { lineStyle: { color: '#46505f' } },
+      axisTick: { lineStyle: { color: '#46505f' } },
+      splitLine: { show: true, lineStyle: { color: CHART_GRID } },
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: CHART_TEXT, formatter: '{value} ms' },
+      axisLabel: { color: CHART_TEXT, fontFamily: MONO, fontSize: 10 },
       splitLine: { lineStyle: { color: CHART_GRID } },
     },
-    series: Object.entries(series).map(([id, points]) => ({
-      name: names[id] ?? id,
-      type: 'line',
-      showSymbol: false,
-      smooth: true,
-      lineStyle: { width: 1.6 },
-      color: colorFor(id),
-      data: points.map(([t, v]) => [t * 1000, v]),
-    })),
+    series: [
+      ...ids.map((id) => ({
+        name: label(id),
+        type: 'line',
+        showSymbol: false,
+        lineStyle: { width: 1.6 },
+        color: colorFor(id),
+        emphasis: { focus: 'series', lineStyle: { width: 2.4 } },
+        data: series[id].map(([t, v]) => [t * 1000, v]),
+      })),
+      {
+        name: 'Umbral',
+        type: 'line',
+        color: RED,
+        data: [],
+        markLine: {
+          silent: true, symbol: 'none',
+          lineStyle: { color: RED, type: 'dashed', width: 1 },
+          label: { color: RED, fontFamily: MONO, fontSize: 10, formatter: `MAX ${threshold}` },
+          data: [{ yAxis: threshold }],
+        },
+      },
+    ],
   };
 }
 
@@ -41,55 +87,11 @@ export function sparkline(points: Point[], color: string): EChartsCoreOption {
       {
         type: 'line',
         showSymbol: false,
-        smooth: true,
+        step: 'middle',
         color,
-        lineStyle: { width: 1.5 },
-        areaStyle: { opacity: 0.12 },
+        lineStyle: { width: 1.4 },
+        areaStyle: { color, opacity: 0.12 },
         data: points.map(([t, v]) => [t * 1000, v]),
-      },
-    ],
-  };
-}
-
-export function gauge(value: number | null, label: string, color: string, max = 100, unit = '%'): EChartsCoreOption {
-  return {
-    series: [
-      {
-        type: 'gauge',
-        startAngle: 90,
-        endAngle: -270,
-        min: 0,
-        max,
-        progress: { show: true, width: 10, itemStyle: { color } },
-        axisLine: { lineStyle: { width: 10, color: [[1, '#1f2a3b']] } },
-        pointer: { show: false },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { show: false },
-        title: { offsetCenter: [0, '32%'], color: CHART_TEXT, fontSize: 11 },
-        detail: {
-          offsetCenter: [0, '-8%'],
-          fontSize: 20,
-          fontWeight: 600,
-          color: '#e6ebf2',
-          formatter: (v: number) => `${Math.round(v)}${unit}`,
-        },
-        data: [{ value: value ?? 0, name: label }],
-      },
-    ],
-  };
-}
-
-export function donut(data: { name: string; value: number; color: string }[]): EChartsCoreOption {
-  return {
-    tooltip: { trigger: 'item' },
-    series: [
-      {
-        type: 'pie',
-        radius: ['58%', '82%'],
-        padAngle: 2,
-        label: { show: false },
-        data: data.map((d) => ({ name: d.name, value: d.value, itemStyle: { color: d.color } })),
       },
     ],
   };

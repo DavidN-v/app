@@ -1,163 +1,234 @@
-<section class="stats" aria-label="Resumen de la flota">
-  <div class="stat" [class.is-warn]="loaded() && online().length < devices().length">
-    <span class="stat-label">Dispositivos en línea</span>
-    @if (loaded()) {
-      <strong class="stat-value">{{ online().length }}<small> / {{ devices().length }}</small></strong>
-      <span class="stat-hint">{{ offlineText() }}</span>
-    } @else {
-      <span class="skeleton skeleton-lg w-40"></span>
-    }
-  </div>
-  <div class="stat" [class.is-warn]="(overview()?.alerts_open ?? 0) > 0">
-    <span class="stat-label">Alertas abiertas</span>
-    @if (overview(); as o) {
-      <strong class="stat-value">{{ o.alerts_open }}</strong>
-      <a routerLink="/alerts" class="stat-hint link">{{ o.alerts_open ? 'Revisar alertas' : 'Nada pendiente' }}</a>
-    } @else {
-      <span class="skeleton skeleton-lg w-40"></span>
-    }
-  </div>
-  <dl class="stat-list">
-    <div>
-      <dt>Modelos desplegados</dt>
-      <dd>{{ overview()?.models?.by_status?.deployed ?? '—' }} <small>de {{ overview()?.models?.total ?? '—' }} versiones</small></dd>
+<div class="boot">
+  <section class="ov-hero" aria-label="Resumen de la flota">
+    <div class="hero-cell">
+      <div class="hero-meta"><span class="label">[ Unidades en línea ]</span><span>{{ offlineText() }}</span></div>
+      @if (loaded()) {
+        <div class="hero-num">
+          <span [egCount]="online().length" [pad]="2"></span><small>/{{ devices().length.toString().padStart(2, '0') }}</small>
+        </div>
+      } @else {
+        <span class="skeleton skeleton-lg w-60"></span>
+      }
+      <div class="segments" [class.hot]="loaded() && online().length < devices().length" aria-hidden="true">
+        @for (s of segmentsFor(devices().length ? (online().length / devices().length) * 100 : 0); track $index) {
+          <i [class.on]="s"></i>
+        }
+      </div>
     </div>
-    <div>
-      <dt>Latencia promedio</dt>
-      <dd>{{ fmt(avgLatency()) }} <small>ms</small></dd>
-    </div>
-    <div>
-      <dt>CPU promedio</dt>
-      <dd>{{ fmt(avgCpu()) }} <small>%</small></dd>
-      <div class="meter" [class.is-warn]="(avgCpu() ?? 0) > 75"><span [style.width.%]="avgCpu() ?? 0"></span></div>
-    </div>
-    <div>
-      <dt>RAM promedio</dt>
-      <dd>{{ fmt(avgRam()) }} <small>%</small></dd>
-      <div class="meter" [class.is-warn]="(avgRam() ?? 0) > 80"><span [style.width.%]="avgRam() ?? 0"></span></div>
-    </div>
-  </dl>
-</section>
 
-<section class="grid grid-main">
-  <div class="card">
-    <div class="card-head">
-      <h2>Dispositivos</h2>
-      <a routerLink="/devices" class="link">Ver todos</a>
+    <div class="hero-cell" [class.alert]="(overview()?.alerts_open ?? 0) > 0">
+      <span class="stripes" aria-hidden="true"></span>
+      <div class="hero-meta"><span class="label">[ Alertas abiertas ]</span></div>
+      @if (overview(); as o) {
+        <div class="hero-num"><span [egCount]="o.alerts_open" [pad]="2"></span></div>
+        <div class="hero-meta">
+          <a routerLink="/alerts" class="link">{{ o.alerts_open ? 'Atender ahora' : 'Sin pendientes' }}</a>
+        </div>
+      } @else {
+        <span class="skeleton skeleton-lg w-40"></span>
+      }
     </div>
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Estado</th>
-            <th>Dispositivo</th>
-            <th>Modelo</th>
-            <th class="num">CPU</th>
-            <th class="num">RAM</th>
-            <th class="num">Latencia</th>
-          </tr>
-        </thead>
-        <tbody>
-          @if (!loaded()) {
-            @for (i of skeletonRows; track i) {
-              <tr class="skeleton-row"><td colspan="6"><span class="skeleton w-80"></span></td></tr>
-            }
-          }
-          @for (d of devices(); track d.id) {
+
+    <div class="hero-cell readouts-cell">
+      <dl class="readouts">
+        <div class="readout">
+          <dt>Modelos desplegados</dt>
+          <dd><span [egCount]="overview()?.models?.by_status?.deployed ?? null" [pad]="2"></span><small>/ {{ overview()?.models?.total ?? '—' }} ver.</small></dd>
+        </div>
+        <div class="readout" [class.hot]="policy.over('latency', avgLatency())" [attr.data-tip]="policy.tip('latency', avgLatency())">
+          <dt>Latencia media</dt>
+          <dd><span [egCount]="avgLatency()" [decimals]="1"></span><small>ms</small></dd>
+        </div>
+        <div class="readout" [class.hot]="policy.over('cpu', avgCpu())" [attr.data-tip]="policy.tip('cpu', avgCpu())">
+          <dt>CPU media <span class="limit">lím. {{ policy.thresholds().cpu.value }}%</span></dt>
+          <dd><span [egCount]="avgCpu()" [decimals]="1"></span><small>%</small></dd>
+          <div class="segments" [class.hot]="policy.over('cpu', avgCpu())" aria-hidden="true">
+            @for (s of segmentsFor(avgCpu()); track $index) { <i [class.on]="s"></i> }
+          </div>
+        </div>
+        <div class="readout" [class.hot]="policy.over('ram', avgRam())" [attr.data-tip]="policy.tip('ram', avgRam())">
+          <dt>RAM media <span class="limit">lím. {{ policy.thresholds().ram.value }}%</span></dt>
+          <dd><span [egCount]="avgRam()" [decimals]="1"></span><small>%</small></dd>
+          <div class="segments" [class.hot]="policy.over('ram', avgRam())" aria-hidden="true">
+            @for (s of segmentsFor(avgRam()); track $index) { <i [class.on]="s"></i> }
+          </div>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="grid grid-main">
+    <div class="card">
+      <div class="card-head">
+        <h2>Flota</h2>
+        <span class="muted hide-sm">Clic en una unidad para aislarla en la gráfica</span>
+        <a routerLink="/devices" class="link">Inventario</a>
+      </div>
+      <div class="table-wrap">
+        <table class="table table-hover">
+          <thead>
             <tr>
-              <td><span class="dot" [class.on]="d.status === 'online'" [attr.aria-label]="d.status === 'online' ? 'En línea' : 'Sin conexión'"></span></td>
-              <td>
-                <span class="swatch" [style.background]="colorFor(d.id)"></span>{{ d.name }}
-              </td>
-              <td class="muted">{{ d.current_model ? d.current_model.name + ' (' + d.current_model.framework.toUpperCase() + ')' : '—' }}</td>
-              <td class="num">{{ d.cpu !== null ? d.cpu.toFixed(0) + '%' : '—' }}</td>
-              <td class="num">{{ d.ram !== null ? d.ram.toFixed(0) + '%' : '—' }}</td>
-              <td class="num">{{ d.latency_ms !== null ? d.latency_ms.toFixed(0) + ' ms' : '—' }}</td>
+              <th>Est.</th>
+              <th [attr.aria-sort]="fleetSort.ariaSort('id')"><button class="th-sort" (click)="fleetSort.toggle('id')">Unidad {{ fleetSort.indicator('id') }}</button></th>
+              <th>Modelo</th>
+              <th class="num" [attr.aria-sort]="fleetSort.ariaSort('cpu')"><button class="th-sort" (click)="fleetSort.toggle('cpu')">CPU {{ fleetSort.indicator('cpu') }}</button></th>
+              <th class="num" [attr.aria-sort]="fleetSort.ariaSort('ram')"><button class="th-sort" (click)="fleetSort.toggle('ram')">RAM {{ fleetSort.indicator('ram') }}</button></th>
+              <th class="num" [attr.aria-sort]="fleetSort.ariaSort('temp')"><button class="th-sort" (click)="fleetSort.toggle('temp')">Temp. {{ fleetSort.indicator('temp') }}</button></th>
+              <th class="num" [attr.aria-sort]="fleetSort.ariaSort('latency')"><button class="th-sort" (click)="fleetSort.toggle('latency')">Lat. {{ fleetSort.indicator('latency') }}</button></th>
             </tr>
-          } @empty {
-            @if (loaded()) {
-              <tr><td colspan="6" class="empty">Aún no hay dispositivos registrados. Un administrador puede darlos de alta desde la API.</td></tr>
+          </thead>
+          <tbody>
+            @if (!loaded()) {
+              @for (i of skeletonRows; track i) {
+                <tr class="skeleton-row"><td colspan="7"><span class="skeleton w-80"></span></td></tr>
+              }
             }
+            @for (d of sortedDevices(); track d.id) {
+              <tr
+                [class.selected]="isolated() === d.id"
+                (click)="isolate(d.id)"
+                (keydown.enter)="isolate(d.id)"
+                tabindex="0"
+                [attr.aria-pressed]="isolated() === d.id"
+              >
+                <td><span class="dot" [class.on]="d.status === 'online'" [attr.aria-label]="d.status === 'online' ? 'En línea' : 'Sin conexión'"></span></td>
+                <td><span class="swatch" [style.background]="colorFor(d.id)"></span>{{ d.id.toUpperCase() }}</td>
+                <td class="muted">{{ d.current_model ? d.current_model.name + ':' + d.current_model.version : '—' }}</td>
+                <td class="num"><eg-metric metric="cpu" [value]="d.cpu" /></td>
+                <td class="num"><eg-metric metric="ram" [value]="d.ram" /></td>
+                <td class="num"><eg-metric metric="temp" [value]="d.temp" /></td>
+                <td class="num"><eg-metric metric="latency" [value]="d.latency_ms" /></td>
+              </tr>
+            } @empty {
+              @if (loaded()) {
+                <tr><td colspan="7" class="empty">Sin unidades registradas</td></tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Latencia de inferencia</h2>
+        <div class="seg-control" role="group" aria-label="Rango de tiempo">
+          @for (w of windows; track w.key) {
+            <button [class.active]="window() === w.key" [attr.aria-pressed]="window() === w.key" (click)="setWindow(w.key)">{{ w.label }}</button>
           }
-        </tbody>
-      </table>
+        </div>
+      </div>
+      @if (hiddenSeries().size) {
+        <div class="chart-filter">
+          {{ isolated() ? 'Mostrando solo ' + isolated()!.toUpperCase() : hiddenSeries().size + ' series ocultas' }}
+          <button class="btn btn-sm btn-ghost" (click)="showAll()">Ver todas</button>
+        </div>
+      }
+      <div class="chart chart-lg" [egChart]="latencyOptions()" (legendToggle)="onLegend($event)"></div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-head">
-      <h2>Latencia de inferencia</h2>
-      <span class="muted small">Últimos minutos</span>
+  <section class="grid grid-ops">
+    <div class="card terminal-cell">
+      <div class="card-head">
+        <h2>Registro en vivo</h2>
+        <button class="btn btn-sm" [class.btn-danger]="paused()" (click)="togglePause()" [attr.aria-pressed]="paused()">
+          {{ paused() ? 'Reanudar' : 'Pausar' }}
+        </button>
+      </div>
+      <div class="log-tools">
+        <div class="chips" role="group" aria-label="Tipos de evento">
+          @for (k of kindsList; track k) {
+            <button class="chip" [class.on]="logKinds().has(k)" [attr.aria-pressed]="logKinds().has(k)" (click)="toggleKind(k)">{{ k }}</button>
+          }
+        </div>
+        <select class="log-device" aria-label="Filtrar por dispositivo" (change)="setLogDevice($any($event.target).value)">
+          <option value="">Todas las unidades</option>
+          @for (d of devices(); track d.id) {
+            <option [value]="d.id">{{ d.id.toUpperCase() }}</option>
+          }
+        </select>
+      </div>
+      <div class="prompt" [class.paused]="isPaused()">
+        {{ isPaused() ? 'pausado' : 'tail -f edge/#' }}
+        @if (pendingLines() > 0) { <span class="pending">+{{ pendingLines() }} nuevas</span> }
+      </div>
+      <ol class="terminal" aria-live="off" (mouseenter)="setHover(true)" (mouseleave)="setHover(false)">
+        @for (l of log(); track l.id) {
+          <li [class.hot]="l.hot" [class.clickable]="l.device" (click)="openDevice(l)">
+            <span class="t">{{ l.time }}</span><span class="who" [style.color]="l.hot ? null : colorFor(l.who)">{{ l.who }}</span><span class="k">{{ l.kind }}</span><span class="msg">{{ l.msg }}</span>
+          </li>
+        } @empty {
+          <li class="empty">Sin eventos con estos filtros</li>
+        }
+      </ol>
     </div>
-    <div class="chart chart-lg" [egChart]="latencyOptions()"></div>
-  </div>
-</section>
 
-<section class="grid grid-3">
-  <div class="card">
-    <div class="card-head"><h2>Recursos promedio</h2></div>
-    <div class="gauges">
-      <div class="chart chart-gauge" [egChart]="cpuGauge()"></div>
-      <div class="chart chart-gauge" [egChart]="ramGauge()"></div>
-      <div class="chart chart-gauge" [egChart]="tempGauge()"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head">
-      <h2>Gobernanza de modelos</h2>
-      <a routerLink="/models" class="link">Registro</a>
-    </div>
-    <div class="governance">
-      <div class="chart chart-donut" [egChart]="modelsDonut()"></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Gobernanza</h2>
+        <a routerLink="/models" class="link">Registro</a>
+      </div>
+      <div class="stack" aria-hidden="true">
+        <span [style.flex-grow]="status().deployed"></span>
+        <span class="s-approved" [style.flex-grow]="status().approved"></span>
+        <span class="s-draft" [style.flex-grow]="status().draft"></span>
+        <span class="s-retired" [style.flex-grow]="status().retired"></span>
+      </div>
       <ul class="facts">
-        <li><span>Control de versiones</span><strong>{{ overview()?.models?.total ?? 0 }} modelos</strong></li>
-        <li><span>Pendientes de aprobación</span><strong class="amber">{{ overview()?.models?.by_status?.draft ?? 0 }}</strong></li>
-        <li><span>Despliegues en curso</span><strong>{{ overview()?.deployments?.pending ?? 0 }}</strong></li>
+        <li><span><i></i>Desplegados</span><strong>{{ status().deployed }}</strong></li>
+        <li><span><i class="k-approved"></i>Aprobados</span><strong>{{ status().approved }}</strong></li>
+        <li><span><i class="k-draft"></i>Por aprobar</span><strong [class.red]="status().draft > 0">{{ status().draft }}</strong></li>
+        <li><span><i class="k-retired"></i>Retirados</span><strong>{{ status().retired }}</strong></li>
         <li><span>Despliegues fallidos</span><strong [class.red]="(overview()?.deployments?.failed ?? 0) > 0">{{ overview()?.deployments?.failed ?? 0 }}</strong></li>
       </ul>
     </div>
-  </div>
 
-  <div class="card">
-    <div class="card-head">
-      <h2>Alertas recientes</h2>
-      <a routerLink="/alerts" class="link">Ver todas</a>
-    </div>
-    <ul class="alert-list">
-      @for (a of alerts(); track a.id) {
-        <li [class]="'sev-' + a.severity">
-          <i></i>
-          <div>
-            <p>{{ a.message }}</p>
-            <small class="muted">{{ a.created_at | timeAgo }}</small>
-          </div>
-        </li>
-      } @empty {
-        <li class="empty">Sin alertas recientes.</li>
-      }
-    </ul>
-  </div>
-</section>
-
-<section class="device-cards">
-  @for (d of devices(); track d.id) {
-    <article class="card device-card">
-      <header>
-        <strong>{{ d.name }}</strong>
-        <eg-status [status]="d.status" />
-      </header>
-      <p class="muted small">{{ d.role }}</p>
-      <div class="device-model">
-        <span class="swatch" [style.background]="colorFor(d.id)"></span>{{ d.current_model ? d.current_model.name + ' v' + d.current_model.version : 'Sin modelo' }}
+    <div class="card">
+      <div class="card-head">
+        <h2>Alertas</h2>
+        <a routerLink="/alerts" class="link">Todas</a>
       </div>
-      <div class="chart chart-spark" [egChart]="sparks()[d.id]"></div>
-      <dl>
-        <div><dt>CPU</dt><dd>{{ d.cpu !== null ? d.cpu.toFixed(0) + '%' : '—' }}</dd></div>
-        <div><dt>RAM</dt><dd>{{ d.ram !== null ? d.ram.toFixed(0) + '%' : '—' }}</dd></div>
-        <div><dt>Temp.</dt><dd>{{ d.temp !== null ? d.temp.toFixed(0) + '°' : '—' }}</dd></div>
-        <div><dt>Lat.</dt><dd>{{ d.latency_ms !== null ? d.latency_ms.toFixed(0) + ' ms' : '—' }}</dd></div>
-      </dl>
-    </article>
-  }
-</section>
+      <ul class="alert-list">
+        @for (a of alerts(); track a.id) {
+          <li [class]="'sev-' + a.severity">
+            <i></i>
+            <div>
+              <p>{{ a.message }}</p>
+              <small class="muted">{{ a.created_at | timeAgo }}</small>
+            </div>
+          </li>
+        } @empty {
+          <li class="empty">Sin alertas recientes</li>
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="device-cards" aria-label="Unidades">
+    @for (d of devices(); track d.id; let i = $index) {
+      <article
+        class="card device-card"
+        [class.down]="d.status !== 'online'"
+        [class.isolated]="isolated() === d.id"
+        [style.--unit]="colorFor(d.id)"
+        (click)="isolate(d.id)"
+      >
+        <header>
+          <span class="unit">Unit / {{ (i + 1).toString().padStart(2, '0') }}</span>
+          <eg-status [status]="d.status" />
+        </header>
+        <strong>{{ d.name }}</strong>
+        <p class="muted">{{ d.role }}</p>
+        <div class="device-model">{{ d.current_model ? d.current_model.name + ' v' + d.current_model.version : 'Sin modelo' }}</div>
+        <div class="chart chart-spark" [egChart]="sparks()[d.id]"></div>
+        <dl>
+          <div><dt>CPU</dt><dd><eg-metric metric="cpu" [value]="d.cpu" /></dd></div>
+          <div><dt>RAM</dt><dd><eg-metric metric="ram" [value]="d.ram" /></dd></div>
+          <div><dt>Temp</dt><dd><eg-metric metric="temp" [value]="d.temp" /></dd></div>
+          <div><dt>Lat</dt><dd><eg-metric metric="latency" [value]="d.latency_ms" /></dd></div>
+        </dl>
+      </article>
+    }
+  </section>
+</div>

@@ -11,6 +11,8 @@ DEFAULT_POLICIES: dict[str, tuple[str, str]] = {
     "max_latency_ms": ("100", "Latencia de inferencia máxima antes de alertar (ms)"),
     "max_temp_c": ("75", "Temperatura máxima del dispositivo (°C)"),
     "max_cpu_pct": ("90", "Uso de CPU máximo (%)"),
+    "max_ram_pct": ("85", "Uso de RAM máximo (%)"),
+    "deploy_timeout_s": ("120", "Segundos sin confirmación antes de dar un despliegue por fallido"),
     "max_drift_psi": ("0.2", "PSI máximo antes de declarar drift"),
     "require_signature": ("true", "Solo se despliegan modelos firmados"),
     "allowed_licenses": ("apache-2.0,mit,agpl-3.0,llama3", "Licencias permitidas (CSV)"),

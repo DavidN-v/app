@@ -4,6 +4,7 @@ Tópicos:
   edge/{id}/telemetry    {"cpu": 18.2, "ram": 42.0, "temp": 51.3}
   edge/{id}/inference    {"model": "yolo", "version": "8.1", "latency_ms": 28, "confidence": 0.92}
   edge/{id}/status       "online" | "offline"   (LWT)
+  edge/{id}/deploy/progress {"deployment_id": 3, "stage": "downloading" | "verifying" | "installing"}
   edge/{id}/deploy/ack   {"deployment_id": 3, "status": "succeeded" | "failed", "message": ""}
 """
 
@@ -44,6 +45,8 @@ def handle(db: Session, topic: str, payload: bytes, retained: bool = False) -> N
                 _on_telemetry(db, device, data)
             elif kind == "inference":
                 _on_inference(db, device, data)
+            elif kind == "deploy/progress":
+                _on_deploy_progress(db, device, data)
             elif kind == "deploy/ack":
                 _on_deploy_ack(db, device, data)
         db.commit()
@@ -97,6 +100,11 @@ def _on_telemetry(db: Session, device: Device, data: dict) -> None:
         raise_alert(db, device.id, "high_cpu", "warning",
                     f"CPU alta en {device.name}: {device.cpu:.0f}% (> {max_cpu:g}%)")
 
+    max_ram = rules.number("max_ram_pct", 85)
+    if device.ram > max_ram:
+        raise_alert(db, device.id, "high_ram", "warning",
+                    f"RAM alta en {device.name}: {device.ram:.0f}% (> {max_ram:g}%)")
+
     hub.broadcast({"type": "telemetry", "data": {
         "id": device.id, "cpu": device.cpu, "ram": device.ram, "temp": device.temp,
         "ts": device.last_seen.isoformat(),
@@ -124,6 +132,21 @@ def _on_inference(db: Session, device: Device, data: dict) -> None:
     }})
 
 
+PROGRESS_STAGES = ("downloading", "verifying", "installing")
+
+
+def _on_deploy_progress(db: Session, device: Device, data: dict) -> None:
+    stage = str(data["stage"])
+    dep = db.get(Deployment, int(data["deployment_id"]))
+    if stage not in PROGRESS_STAGES or dep is None or dep.device_id != device.id or dep.status != "pending":
+        return
+    # Las etapas solo avanzan: un mensaje atrasado no hace retroceder la barra
+    order = ("requested", *PROGRESS_STAGES)
+    if order.index(stage) > order.index(dep.stage if dep.stage in order else "requested"):
+        dep.stage = stage
+        hub.broadcast({"type": "deployment", "data": {"id": dep.id, "status": dep.status, "stage": stage}})
+
+
 def _on_deploy_ack(db: Session, device: Device, data: dict) -> None:
     dep = db.get(Deployment, int(data["deployment_id"]))
     if dep is None or dep.device_id != device.id or dep.status != "pending":
@@ -132,13 +155,15 @@ def _on_deploy_ack(db: Session, device: Device, data: dict) -> None:
     dep.message = str(data.get("message", ""))
     if data.get("status") == "succeeded":
         dep.status = "succeeded"
+        dep.stage = "confirmed"
         device.current_model_id = dep.model_id
         if dep.model.status == "approved":
             dep.model.status = "deployed"
     else:
         dep.status = "failed"
+        dep.stage = "failed"
         raise_alert(db, device.id, "deployment_failed", "critical",
                     f"Falló el despliegue de {dep.model.name} v{dep.model.version}: {dep.message}")
     audit.record(db, f"device:{device.id}", f"deployment.{dep.status}", "deployment", dep.id,
                  {"model_id": dep.model_id, "message": dep.message})
-    hub.broadcast({"type": "deployment", "data": {"id": dep.id, "status": dep.status}})
+    hub.broadcast({"type": "deployment", "data": {"id": dep.id, "status": dep.status, "stage": dep.stage}})

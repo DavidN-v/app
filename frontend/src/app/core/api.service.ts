@@ -6,6 +6,8 @@ import {
   ChainVerification,
   Deployment,
   Device,
+  LatencyHistory,
+  LatencyWindow,
   MLModel,
   ModelStatus,
   NewModel,
@@ -25,6 +27,10 @@ export class ApiService {
 
   overview() {
     return this.http.get<Overview>('/api/overview');
+  }
+
+  latencyHistory(window: LatencyWindow) {
+    return this.http.get<LatencyHistory>('/api/metrics/latency', { params: { window } });
   }
 
   devices() {

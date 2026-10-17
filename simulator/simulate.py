@@ -68,8 +68,13 @@ class Simulator:
 
     def deploy(self, client: mqtt.Client, p: Profile, raw: bytes) -> None:
         cmd = json.loads(raw)
-        time.sleep(random.uniform(2, 5))  # descarga + verificación
+        topic = f"edge/{p.device_id}/deploy/progress"
         ok = random.random() > 0.1
+        for stage, secs in (("downloading", (2, 4)), ("verifying", (1, 2)), ("installing", (1, 2))):
+            client.publish(topic, json.dumps({"deployment_id": cmd["deployment_id"], "stage": stage}), qos=1)
+            time.sleep(random.uniform(*secs))
+            if stage == "verifying" and not ok:
+                break  # el hash no coincide: no se llega a instalar
         if ok:
             p.model, p.version = cmd["model"], cmd["version"]
         ack = {"deployment_id": cmd["deployment_id"], "status": "succeeded" if ok else "failed",
