@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     mqtt_port: int = 1883
     mqtt_username: str | None = None
     mqtt_password: str | None = None
+    # Conexión cifrada con el broker (configuración de producción, puerto 8883). El broker exige
+    # que la API se identifique con su propio certificado (nombre governance-api)
+    mqtt_tls: bool = False
+    mqtt_ca: str | None = None
+    mqtt_cert: str | None = None
+    mqtt_key: str | None = None
 
     # Segundos sin heartbeat antes de marcar un dispositivo como offline
     offline_after_s: int = 30

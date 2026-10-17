@@ -13,3 +13,7 @@ dist/
 .angular/
 
 firmware/esp32/.pio/
+
+# Certificados y claves privadas: nunca se suben al repositorio
+infra/mosquitto/certs/
+firmware/esp32/src/certs.h

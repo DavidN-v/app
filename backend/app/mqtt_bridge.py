@@ -28,6 +28,8 @@ class MqttBridge:
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="governance-api")
         if s.mqtt_username:
             self.client.username_pw_set(s.mqtt_username, s.mqtt_password)
+        if s.mqtt_tls:
+            self.client.tls_set(ca_certs=s.mqtt_ca, certfile=s.mqtt_cert, keyfile=s.mqtt_key)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         self.client.reconnect_delay_set(min_delay=1, max_delay=30)

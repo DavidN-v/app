@@ -7,5 +7,6 @@ topic readwrite edge/#
 pattern write edge/%u/telemetry
 pattern write edge/%u/inference
 pattern write edge/%u/status
+pattern write edge/%u/deploy/progress
 pattern write edge/%u/deploy/ack
 pattern read  edge/%u/deploy
