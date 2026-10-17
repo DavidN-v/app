@@ -36,6 +36,8 @@ jobs:
         with: { python-version: "3.12", cache: pip }
       - run: pip install numpy pillow pytest ./edge-agent
       - run: pytest devices/vision/tests
+      - run: pytest devices/genai/tests
+      - run: pytest devices/agent/tests
 
   frontend:
     runs-on: ubuntu-latest

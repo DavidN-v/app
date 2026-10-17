@@ -44,7 +44,7 @@ def check_drift(db: Session) -> dict[str, float]:
     for device in db.query(Device).filter(Device.current_model_id.isnot(None)):
         model = device.current_model
         reference = (model.metrics or {}).get("reference_confidence_hist")
-        samples = hub.confidences(device.id)
+        samples = hub.confidences(device.id, model.name)
         if not reference or len(samples) < MIN_DRIFT_SAMPLES:
             continue
         value = drift.psi(reference, drift.histogram(samples))

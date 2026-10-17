@@ -77,7 +77,7 @@ services:
     build: ./simulator
     command: ["--host", "mosquitto"]
     environment:
-      # Con el perfil "real": SIM_SKIP=rpi5-vision para no tener dos rpi5-vision
+      # Con el perfil "real": SIM_SKIP=rpi5-vision,rpi5-genai,rpi5-agent para no duplicar las placas reales
       SIM_SKIP: ${SIM_SKIP:-}
     depends_on: [mosquitto, api]
 
@@ -97,9 +97,59 @@ services:
     depends_on: [mosquitto, api]
     ports: ["8101:8101"]
 
+  # Modelo de lenguaje real: llama.cpp sirviendo Qwen2.5-0.5B-Instruct (Apache 2.0) en CPU
+  genai-llm:
+    profiles: ["real"]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command:
+      - --hf-repo
+      - Qwen/Qwen2.5-0.5B-Instruct-GGUF
+      - --hf-file
+      - qwen2.5-0.5b-instruct-q4_k_m.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --ctx-size
+      - "4096"
+      - --threads
+      - "4"
+    environment:
+      LLAMA_CACHE: /models
+    volumes: [llm-models:/models]
+
+  rpi5-genai:
+    profiles: ["real"]
+    build:
+      context: .
+      dockerfile: devices/genai/Dockerfile
+    image: edge-governance-rpi5-genai
+    environment:
+      EDGE_DEVICE_ID: rpi5-genai
+      EDGE_MQTT_HOST: mosquitto
+      LLM_URL: http://genai-llm:8080
+      GOV_API_URL: http://api:8000
+      GENAI_AUTO_ASK_S: ${GENAI_AUTO_ASK_S:-20}
+    depends_on: [mosquitto, api, genai-llm]
+    ports: ["8102:8102"]
+
+  # Agente real: su propia telemetría + detector de anomalías sobre la telemetría de la flota
+  rpi5-agent:
+    profiles: ["real"]
+    build:
+      context: .
+      dockerfile: devices/agent/Dockerfile
+    image: edge-governance-rpi5-agent
+    environment:
+      EDGE_DEVICE_ID: rpi5-agent
+      EDGE_MQTT_HOST: mosquitto
+    depends_on: [mosquitto, api]
+    ports: ["8103:8103"]
+
 volumes:
   mosquitto-data:
   postgres-data:
   vm-data:
   grafana-data:
   vision-models:
+  llm-models:

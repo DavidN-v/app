@@ -60,17 +60,18 @@ class LiveHub:
         with self._lock:
             return [(k[0], k[1], v[0] / v[1], v[2], int(v[1])) for k, v in self._buckets.items() if v[1]]
 
-    def record_confidence(self, device_id: str, value: float) -> None:
+    def record_confidence(self, device_id: str, value: float, model: str | None = None) -> None:
+        # Se separa por modelo: tras un despliegue no se mezclan confianzas de modelos distintos
         with self._lock:
-            self.confidence[device_id].append(value)
+            self.confidence[f"{device_id}|{model or ''}"].append(value)
 
     def latency_series(self) -> dict[str, list[tuple[float, float]]]:
         with self._lock:
             return {k: list(v) for k, v in self.latency.items()}
 
-    def confidences(self, device_id: str) -> list[float]:
+    def confidences(self, device_id: str, model: str | None = None) -> list[float]:
         with self._lock:
-            return list(self.confidence.get(device_id, ()))
+            return list(self.confidence.get(f"{device_id}|{model or ''}", ()))
 
     def broadcast(self, event: dict[str, Any]) -> None:
         if self._loop is None:

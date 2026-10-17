@@ -120,7 +120,7 @@ def _on_inference(db: Session, device: Device, data: dict) -> None:
     prom.INFERENCE_LATENCY.labels(device.id, model_label).set(latency)
     prom.INFERENCES.labels(device.id, model_label).inc()
     if (conf := data.get("confidence")) is not None:
-        hub.record_confidence(device.id, float(conf))
+        hub.record_confidence(device.id, float(conf), data.get("model"))
 
     max_latency = policies.load(db).number("max_latency_ms", 100)
     if latency > max_latency:

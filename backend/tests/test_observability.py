@@ -143,6 +143,16 @@ def test_in_distribution_does_not_trigger_drift(mqtt, db):
     assert open_alerts(db, "drift") == []
 
 
+def test_drift_ignores_confidences_from_another_model(mqtt, db):
+    rng = random.Random(9)
+    for _ in range(80):  # otro modelo en la misma placa, con confianzas bajas: no es drift de yolo
+        mqtt("edge/rpi5-vision/inference",
+             {"model": "telemetry-agent", "version": "1.4", "latency_ms": 1,
+              "confidence": rng.uniform(0.2, 0.5)})
+    assert jobs.check_drift(db) == {}
+    assert open_alerts(db, "drift") == []
+
+
 def test_drift_requires_minimum_samples(mqtt, db):
     mqtt("edge/rpi5-vision/inference",
          {"model": "yolo", "version": "8.1", "latency_ms": 30, "confidence": 0.1})
