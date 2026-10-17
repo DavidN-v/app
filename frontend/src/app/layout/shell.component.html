@@ -1,0 +1,53 @@
+<a class="skip-link" href="#main">Saltar al contenido</a>
+<div class="shell" [class.menu-open]="menuOpen()">
+  <aside class="sidebar" aria-label="Navegación principal">
+    <div class="brand">
+      <strong>Edge Governance</strong>
+      <small>Gobernanza de modelos</small>
+    </div>
+    <nav>
+      @for (item of nav; track item.path) {
+        @if (visible(item)) {
+          <a
+            [routerLink]="item.path"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: item.path === '/' }"
+            ariaCurrentWhenActive="page"
+            (click)="menuOpen.set(false)"
+            >{{ item.label }}</a
+          >
+        }
+      }
+    </nav>
+    <div class="sidebar-foot">
+      <div>
+        <strong>{{ auth.user()?.username }}</strong>
+        <small>{{ roleLabel() }}</small>
+      </div>
+      <button class="btn btn-ghost btn-sm" (click)="logout()">Salir</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button
+        class="btn btn-ghost menu-toggle"
+        (click)="menuOpen.set(!menuOpen())"
+        [attr.aria-expanded]="menuOpen()"
+        aria-label="Abrir menú"
+      >
+        Menú
+      </button>
+      <h1>{{ pageTitle() }}</h1>
+      <div class="topbar-right">
+        <span class="live-pill" [class.off]="!live.connected()" role="status">
+          <i aria-hidden="true"></i>{{ live.connected() ? 'Datos en vivo' : 'Reconectando…' }}
+        </span>
+        <span class="tnum hide-sm">{{ live.messagesPerSecond() }} mensajes/s</span>
+      </div>
+    </header>
+    <main class="content" id="main" tabindex="-1">
+      <router-outlet />
+    </main>
+  </div>
+</div>

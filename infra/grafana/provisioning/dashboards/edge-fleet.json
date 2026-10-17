@@ -1,0 +1,53 @@
+{
+  "uid": "edge-fleet",
+  "title": "Edge Fleet",
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "type": "stat", "title": "Dispositivos en línea",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(edge_device_up)", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "Alertas (última hora)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(increase(edge_alerts_raised_total[1h]))", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "Inferencias / s",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(rate(edge_inferences_total[1m]))", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "PSI máximo",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [
+        { "color": "green", "value": null }, { "color": "orange", "value": 0.1 }, { "color": "red", "value": 0.2 }
+      ] } } },
+      "targets": [{ "expr": "max(edge_model_drift_psi)", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Latencia de inferencia (ms)",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "targets": [{ "expr": "edge_inference_latency_ms", "legendFormat": "{{device}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "CPU (%)",
+      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
+      "targets": [{ "expr": "edge_device_cpu_percent", "legendFormat": "{{device}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "RAM (%)",
+      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 8 },
+      "targets": [{ "expr": "edge_device_ram_percent", "legendFormat": "{{device}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Temperatura (°C)",
+      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 8 },
+      "targets": [{ "expr": "edge_device_temperature_celsius", "legendFormat": "{{device}}", "refId": "A" }]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.db
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+edge-agent/models/
+
+node_modules/
+dist/
+.angular/
+
+firmware/esp32/.pio/

@@ -1,0 +1,163 @@
+<section class="stats" aria-label="Resumen de la flota">
+  <div class="stat" [class.is-warn]="loaded() && online().length < devices().length">
+    <span class="stat-label">Dispositivos en línea</span>
+    @if (loaded()) {
+      <strong class="stat-value">{{ online().length }}<small> / {{ devices().length }}</small></strong>
+      <span class="stat-hint">{{ offlineText() }}</span>
+    } @else {
+      <span class="skeleton skeleton-lg w-40"></span>
+    }
+  </div>
+  <div class="stat" [class.is-warn]="(overview()?.alerts_open ?? 0) > 0">
+    <span class="stat-label">Alertas abiertas</span>
+    @if (overview(); as o) {
+      <strong class="stat-value">{{ o.alerts_open }}</strong>
+      <a routerLink="/alerts" class="stat-hint link">{{ o.alerts_open ? 'Revisar alertas' : 'Nada pendiente' }}</a>
+    } @else {
+      <span class="skeleton skeleton-lg w-40"></span>
+    }
+  </div>
+  <dl class="stat-list">
+    <div>
+      <dt>Modelos desplegados</dt>
+      <dd>{{ overview()?.models?.by_status?.deployed ?? '—' }} <small>de {{ overview()?.models?.total ?? '—' }} versiones</small></dd>
+    </div>
+    <div>
+      <dt>Latencia promedio</dt>
+      <dd>{{ fmt(avgLatency()) }} <small>ms</small></dd>
+    </div>
+    <div>
+      <dt>CPU promedio</dt>
+      <dd>{{ fmt(avgCpu()) }} <small>%</small></dd>
+      <div class="meter" [class.is-warn]="(avgCpu() ?? 0) > 75"><span [style.width.%]="avgCpu() ?? 0"></span></div>
+    </div>
+    <div>
+      <dt>RAM promedio</dt>
+      <dd>{{ fmt(avgRam()) }} <small>%</small></dd>
+      <div class="meter" [class.is-warn]="(avgRam() ?? 0) > 80"><span [style.width.%]="avgRam() ?? 0"></span></div>
+    </div>
+  </dl>
+</section>
+
+<section class="grid grid-main">
+  <div class="card">
+    <div class="card-head">
+      <h2>Dispositivos</h2>
+      <a routerLink="/devices" class="link">Ver todos</a>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Estado</th>
+            <th>Dispositivo</th>
+            <th>Modelo</th>
+            <th class="num">CPU</th>
+            <th class="num">RAM</th>
+            <th class="num">Latencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (!loaded()) {
+            @for (i of skeletonRows; track i) {
+              <tr class="skeleton-row"><td colspan="6"><span class="skeleton w-80"></span></td></tr>
+            }
+          }
+          @for (d of devices(); track d.id) {
+            <tr>
+              <td><span class="dot" [class.on]="d.status === 'online'" [attr.aria-label]="d.status === 'online' ? 'En línea' : 'Sin conexión'"></span></td>
+              <td>
+                <span class="swatch" [style.background]="colorFor(d.id)"></span>{{ d.name }}
+              </td>
+              <td class="muted">{{ d.current_model ? d.current_model.name + ' (' + d.current_model.framework.toUpperCase() + ')' : '—' }}</td>
+              <td class="num">{{ d.cpu !== null ? d.cpu.toFixed(0) + '%' : '—' }}</td>
+              <td class="num">{{ d.ram !== null ? d.ram.toFixed(0) + '%' : '—' }}</td>
+              <td class="num">{{ d.latency_ms !== null ? d.latency_ms.toFixed(0) + ' ms' : '—' }}</td>
+            </tr>
+          } @empty {
+            @if (loaded()) {
+              <tr><td colspan="6" class="empty">Aún no hay dispositivos registrados. Un administrador puede darlos de alta desde la API.</td></tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Latencia de inferencia</h2>
+      <span class="muted small">Últimos minutos</span>
+    </div>
+    <div class="chart chart-lg" [egChart]="latencyOptions()"></div>
+  </div>
+</section>
+
+<section class="grid grid-3">
+  <div class="card">
+    <div class="card-head"><h2>Recursos promedio</h2></div>
+    <div class="gauges">
+      <div class="chart chart-gauge" [egChart]="cpuGauge()"></div>
+      <div class="chart chart-gauge" [egChart]="ramGauge()"></div>
+      <div class="chart chart-gauge" [egChart]="tempGauge()"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Gobernanza de modelos</h2>
+      <a routerLink="/models" class="link">Registro</a>
+    </div>
+    <div class="governance">
+      <div class="chart chart-donut" [egChart]="modelsDonut()"></div>
+      <ul class="facts">
+        <li><span>Control de versiones</span><strong>{{ overview()?.models?.total ?? 0 }} modelos</strong></li>
+        <li><span>Pendientes de aprobación</span><strong class="amber">{{ overview()?.models?.by_status?.draft ?? 0 }}</strong></li>
+        <li><span>Despliegues en curso</span><strong>{{ overview()?.deployments?.pending ?? 0 }}</strong></li>
+        <li><span>Despliegues fallidos</span><strong [class.red]="(overview()?.deployments?.failed ?? 0) > 0">{{ overview()?.deployments?.failed ?? 0 }}</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Alertas recientes</h2>
+      <a routerLink="/alerts" class="link">Ver todas</a>
+    </div>
+    <ul class="alert-list">
+      @for (a of alerts(); track a.id) {
+        <li [class]="'sev-' + a.severity">
+          <i></i>
+          <div>
+            <p>{{ a.message }}</p>
+            <small class="muted">{{ a.created_at | timeAgo }}</small>
+          </div>
+        </li>
+      } @empty {
+        <li class="empty">Sin alertas recientes.</li>
+      }
+    </ul>
+  </div>
+</section>
+
+<section class="device-cards">
+  @for (d of devices(); track d.id) {
+    <article class="card device-card">
+      <header>
+        <strong>{{ d.name }}</strong>
+        <eg-status [status]="d.status" />
+      </header>
+      <p class="muted small">{{ d.role }}</p>
+      <div class="device-model">
+        <span class="swatch" [style.background]="colorFor(d.id)"></span>{{ d.current_model ? d.current_model.name + ' v' + d.current_model.version : 'Sin modelo' }}
+      </div>
+      <div class="chart chart-spark" [egChart]="sparks()[d.id]"></div>
+      <dl>
+        <div><dt>CPU</dt><dd>{{ d.cpu !== null ? d.cpu.toFixed(0) + '%' : '—' }}</dd></div>
+        <div><dt>RAM</dt><dd>{{ d.ram !== null ? d.ram.toFixed(0) + '%' : '—' }}</dd></div>
+        <div><dt>Temp.</dt><dd>{{ d.temp !== null ? d.temp.toFixed(0) + '°' : '—' }}</dd></div>
+        <div><dt>Lat.</dt><dd>{{ d.latency_ms !== null ? d.latency_ms.toFixed(0) + ' ms' : '—' }}</dd></div>
+      </dl>
+    </article>
+  }
+</section>

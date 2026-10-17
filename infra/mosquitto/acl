@@ -1,0 +1,11 @@
+# La API de gobernanza ve todo y es la única que puede ordenar despliegues
+user governance-api
+topic readwrite edge/#
+
+# Cada dispositivo (CN del certificado = device_id) solo publica en su propio árbol
+# y solo puede leer sus órdenes de despliegue.
+pattern write edge/%u/telemetry
+pattern write edge/%u/inference
+pattern write edge/%u/status
+pattern write edge/%u/deploy/ack
+pattern read  edge/%u/deploy

@@ -1,0 +1,141 @@
+<div class="page-head">
+  <div>
+    <p class="muted">Ciclo de vida: borrador → aprobado → desplegado → retirado.</p>
+  </div>
+  @if (auth.can('operator')) {
+    <button class="btn btn-primary" (click)="showForm.set(!showForm())">
+      {{ showForm() ? 'Cancelar' : 'Registrar modelo' }}
+    </button>
+  }
+</div>
+
+@if (error()) {
+  <div class="banner banner-error" role="alert">
+    {{ error() }} <button class="btn btn-ghost btn-sm" (click)="error.set('')">Cerrar</button>
+  </div>
+}
+
+@if (showForm()) {
+  <form class="card form-grid" [formGroup]="form" (ngSubmit)="submit()">
+    <label>Nombre<input formControlName="name" placeholder="yolo" /></label>
+    <label>Versión<input formControlName="version" placeholder="8.2" /></label>
+    <label>
+      Formato
+      <select formControlName="framework">
+        <option value="onnx">ONNX</option>
+        <option value="gguf">GGUF (llama.cpp)</option>
+        <option value="tflite">TFLite</option>
+      </select>
+    </label>
+    <label>Tarea<input formControlName="task" placeholder="detección de objetos" /></label>
+    <label class="span-2">URI del artefacto<input formControlName="artifact_uri" placeholder="https://…/model.onnx" /></label>
+    <label class="span-2">
+      SHA-256
+      <input formControlName="sha256" class="mono" placeholder="64 caracteres hexadecimales" />
+      @if (form.controls.sha256.touched && form.controls.sha256.invalid) {
+        <small class="form-error">Debe ser un hash SHA-256 en hexadecimal (64 caracteres)</small>
+      }
+    </label>
+    <label>Firma (cosign)<input formControlName="signature" placeholder="opcional" /></label>
+    <label>Licencia<input formControlName="license" /></label>
+    <div class="span-2 form-actions">
+      <button class="btn btn-primary" type="submit" [disabled]="form.invalid || busy()">Registrar como borrador</button>
+    </div>
+  </form>
+}
+
+<div class="tabs">
+  @for (f of filters; track f.key) {
+    <button class="tab" [class.active]="filter() === f.key" (click)="filter.set(f.key)">
+      {{ f.label }}<span class="count">{{ counts()[f.key] ?? 0 }}</span>
+    </button>
+  }
+</div>
+
+<div class="grid grid-detail">
+  <div class="card">
+    <div class="table-wrap">
+      <table class="table table-hover">
+        <thead>
+          <tr><th>Modelo</th><th>Formato</th><th>Licencia</th><th>Propietario</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody>
+          @if (!loaded()) {
+            @for (i of skeletonRows; track i) {
+              <tr class="skeleton-row"><td colspan="6"><span class="skeleton w-80"></span></td></tr>
+            }
+          }
+          @for (m of visible(); track m.id) {
+            <tr
+              [class.selected]="selected()?.id === m.id"
+              (click)="select(m)"
+              (keydown.enter)="select(m)"
+              tabindex="0"
+              [attr.aria-selected]="selected()?.id === m.id"
+            >
+              <td><strong>{{ m.name }}</strong><span class="ver muted">v{{ m.version }}</span></td>
+              <td>{{ m.framework.toUpperCase() }}</td>
+              <td>{{ m.license }}</td>
+              <td class="muted">{{ m.owner }}</td>
+              <td><eg-status [status]="m.status" /></td>
+              <td class="actions" (click)="$event.stopPropagation()">
+                @if (canApprove(m)) {
+                  <button class="btn btn-sm btn-success" [disabled]="busy()" (click)="transition(m, 'approved')">Aprobar</button>
+                }
+                @if (canRetire(m)) {
+                  <button class="btn btn-sm btn-ghost" [disabled]="busy()" (click)="startRetire(m)">Retirar</button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            @if (loaded()) {
+              <tr><td colspan="6" class="empty">No hay modelos en este estado.</td></tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <aside class="card detail">
+    @if (selected(); as m) {
+      <h3>{{ m.name }}<span class="ver muted">v{{ m.version }}</span></h3>
+      <eg-status [status]="m.status" />
+      @if (retiring()?.id === m.id) {
+        <div class="retire-form" role="group" aria-label="Retirar modelo">
+          <label>
+            Motivo de la retirada
+            <textarea
+              name="reason"
+              [value]="retireReason()"
+              (input)="retireReason.set($any($event.target).value)"
+              placeholder="Por ejemplo: sustituido por la versión 8.2"
+            ></textarea>
+          </label>
+          <div class="row">
+            <button type="button" class="btn btn-ghost btn-sm" (click)="retiring.set(null)">Cancelar</button>
+            <button type="button" class="btn btn-danger btn-sm" [disabled]="!retireReason().trim() || busy()" (click)="confirmRetire(m)">Retirar modelo</button>
+          </div>
+        </div>
+      }
+      <dl class="kv">
+        <dt>Tarea</dt><dd>{{ m.task }}</dd>
+        <dt>Artefacto</dt><dd class="mono break">{{ m.artifact_uri }}</dd>
+        <dt>SHA-256</dt><dd class="mono break">{{ m.sha256 }}</dd>
+        <dt>Firma</dt><dd>{{ m.signature ? 'Firmado: ' + m.signature : 'Sin firmar' }}</dd>
+        <dt>Registrado</dt><dd>{{ m.created_at | date: 'short' }} por {{ m.owner }}</dd>
+        <dt>Aprobado</dt><dd>{{ m.approved_by ? (m.approved_at | date: 'short') + ' por ' + m.approved_by : '—' }}</dd>
+      </dl>
+      <h4>Métricas de validación</h4>
+      <dl class="kv">
+        @for (kv of m.metrics | keyvalue; track kv.key) {
+          @if (isScalar(kv.value)) {
+            <dt>{{ kv.key }}</dt><dd class="tnum">{{ kv.value }}</dd>
+          }
+        }
+      </dl>
+    } @else {
+      <p class="empty">Selecciona un modelo para ver su ficha.</p>
+    }
+  </aside>
+</div>

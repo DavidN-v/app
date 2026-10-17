@@ -1,0 +1,46 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from .. import audit
+from ..db import get_db
+from ..models import Device, User
+from ..schemas import DeviceIn, DeviceOut
+from ..security import current_user, require_role
+
+router = APIRouter(prefix="/api/devices", tags=["devices"])
+
+
+@router.get("", response_model=list[DeviceOut])
+def list_devices(db: Session = Depends(get_db), _: User = Depends(current_user)):
+    return db.query(Device).order_by(Device.created_at, Device.id).all()
+
+
+@router.get("/{device_id}", response_model=DeviceOut)
+def get_device(device_id: str, db: Session = Depends(get_db), _: User = Depends(current_user)):
+    device = db.get(Device, device_id)
+    if device is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dispositivo no encontrado")
+    return device
+
+
+@router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
+def register_device(body: DeviceIn, db: Session = Depends(get_db),
+                    user: User = Depends(require_role("admin"))):
+    if db.get(Device, body.id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "El dispositivo ya existe")
+    device = Device(**body.model_dump())
+    db.add(device)
+    audit.record(db, user.username, "device.registered", "device", device.id, body.model_dump())
+    db.commit()
+    return device
+
+
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+def decommission_device(device_id: str, db: Session = Depends(get_db),
+                        user: User = Depends(require_role("admin"))):
+    device = db.get(Device, device_id)
+    if device is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dispositivo no encontrado")
+    db.delete(device)
+    audit.record(db, user.username, "device.decommissioned", "device", device_id)
+    db.commit()

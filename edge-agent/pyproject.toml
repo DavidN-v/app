@@ -1,0 +1,26 @@
+[project]
+name = "edge-agent"
+version = "1.0.0"
+description = "Agente de telemetría y despliegue OTA para dispositivos edge"
+requires-python = ">=3.11"
+dependencies = ["paho-mqtt>=2.1", "psutil>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+edge-agent = "edge_agent.agent:main"
+
+[tool.setuptools]
+packages = ["edge_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

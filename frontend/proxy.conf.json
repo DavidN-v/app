@@ -1,0 +1,5 @@
+{
+  "/api": { "target": "http://localhost:8000", "secure": false },
+  "/ws": { "target": "ws://localhost:8000", "ws": true, "secure": false },
+  "/metrics": { "target": "http://localhost:8000", "secure": false }
+}

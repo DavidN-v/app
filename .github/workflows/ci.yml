@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[dev]"
+      - run: ruff check app tests
+      - run: pytest
+
+  edge-agent:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: edge-agent } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npx ng test --watch=false
+      - run: npx ng build --configuration production
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, edge-agent, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile demo build
+      - name: Smoke test
+        run: |
+          docker compose --profile demo up -d
+          for i in $(seq 1 30); do curl -fs localhost:8000/healthz && break; sleep 2; done
+          sleep 10
+          TOKEN=$(curl -fs localhost:8000/api/auth/login -H 'Content-Type: application/json' \
+            -d '{"username":"viewer","password":"viewer123"}' | jq -r .access_token)
+          ONLINE=$(curl -fs localhost:8000/api/overview -H "Authorization: Bearer $TOKEN" | jq .devices.online)
+          echo "Dispositivos en línea: $ONLINE"
+          test "$ONLINE" -ge 1
+          curl -fs localhost:8080/ | grep -q "Edge Governance"
+      - if: always()
+        run: docker compose --profile demo logs api simulator | tail -100
