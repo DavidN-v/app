@@ -3,9 +3,10 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { session } from '../../testing/helpers';
-import { MLModel, Role } from '../core/models';
+import { Device, MLModel, Role } from '../core/models';
 import { UNDO_WINDOW_MS } from '../shared/toast.service';
 import { DeploymentsComponent, elapsed, stepStates } from './deployments/deployments.component';
+import { DevicesComponent } from './devices/devices.component';
 import { ModelsComponent } from './models/models.component';
 
 const model = (over: Partial<MLModel> = {}): MLModel => ({
@@ -150,5 +151,70 @@ describe('ModelsComponent · búsqueda', () => {
     fixture.detectChanges();
     expect(el.querySelectorAll('tbody tr').length).toBe(1);
     expect(el.querySelector('tbody')!.textContent).toContain('detección-cámara');
+  });
+});
+
+describe('DevicesComponent · alta y baja', () => {
+  const device = (over: Partial<Device> = {}): Device => ({
+    id: 'uno-q', name: 'Arduino Uno Q', kind: 'arduino', role: 'Detección', location: 'Lab', status: 'online',
+    last_seen: null, cpu: 10, ram: 20, temp: 40, latency_ms: 25, current_model: null, ...over,
+  });
+
+  function render(role: Role) {
+    const http = setup(role);
+    const fixture = TestBed.createComponent(DevicesComponent);
+    fixture.detectChanges();
+    http.expectOne('/api/devices').flush([device()]);
+    fixture.detectChanges();
+    return { fixture, http, el: fixture.nativeElement as HTMLElement };
+  }
+
+  const button = (el: HTMLElement, text: string) =>
+    [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
+
+  it('solo el administrador puede dar de alta y de baja', () => {
+    const { el } = render('operator');
+    expect(button(el, 'Dar de alta')).toBeUndefined();
+    expect(button(el, 'Dar de baja')).toBeUndefined();
+  });
+
+  it('el alta envía el dispositivo a la API y lo añade a la tabla', () => {
+    const { el, http, fixture } = render('admin');
+    button(el, 'Dar de alta')!.click();
+    fixture.detectChanges();
+    const set = (name: string, value: string) => {
+      const input = el.querySelector(`[formControlName="${name}"]`) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+    set('id', 'rpi5-taller');
+    set('name', 'Raspberry Pi 5 (Taller)');
+    fixture.detectChanges();
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    const req = http.expectOne('/api/devices');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ id: 'rpi5-taller', name: 'Raspberry Pi 5 (Taller)', kind: 'rpi5', role: '', location: '' });
+    req.flush(device({ id: 'rpi5-taller', name: 'Raspberry Pi 5 (Taller)', kind: 'rpi5', status: 'offline' }));
+    fixture.detectChanges();
+    expect(el.querySelector('tbody')!.textContent).toContain('rpi5-taller');
+  });
+
+  it('un identificador no válido para MQTT no se puede enviar', () => {
+    const { el, fixture } = render('admin');
+    button(el, 'Dar de alta')!.click();
+    fixture.detectChanges();
+    const input = el.querySelector('[formControlName="id"]') as HTMLInputElement;
+    input.value = 'Mi Placa/1';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect((el.querySelector('form button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('la baja llama a la API y quita el dispositivo', () => {
+    const { el, http, fixture } = render('admin');
+    button(el, 'Dar de baja')!.click();
+    http.expectOne({ method: 'DELETE', url: '/api/devices/uno-q' }).flush(null);
+    fixture.detectChanges();
+    expect(el.querySelector('tbody')!.textContent).not.toContain('Arduino Uno Q');
   });
 });

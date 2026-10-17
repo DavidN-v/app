@@ -9,6 +9,7 @@ import {
   LatencyHistory,
   LatencyWindow,
   MLModel,
+  NewDevice,
   ModelStatus,
   NewModel,
   Overview,
@@ -44,6 +45,16 @@ export class ApiService {
 
   devices() {
     return this.http.get<Device[]>('/api/devices');
+  }
+
+  /** Da de alta un dispositivo (solo administradores). */
+  registerDevice(body: NewDevice) {
+    return this.http.post<Device>('/api/devices', body);
+  }
+
+  /** Da de baja un dispositivo (solo administradores). */
+  decommissionDevice(id: string) {
+    return this.http.delete<void>(`/api/devices/${encodeURIComponent(id)}`);
   }
 
   models(status?: ModelStatus) {

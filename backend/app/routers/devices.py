@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from .. import audit
 from ..db import get_db
-from ..models import Device, User
+from ..models import Deployment, Device, User
 from ..schemas import DeviceIn, DeviceOut
 from ..security import current_user, require_role
 
@@ -47,6 +47,10 @@ def decommission_device(device_id: str, db: Session = Depends(get_db),
     device = db.get(Device, device_id)
     if device is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dispositivo no encontrado")
+    # Sus despliegues dependen del dispositivo en la base de datos y se borran con él;
+    # el historial completo sigue en la auditoría
+    removed = db.query(Deployment).filter_by(device_id=device_id).delete()
     db.delete(device)
-    audit.record(db, user.username, "device.decommissioned", "device", device_id)
+    audit.record(db, user.username, "device.decommissioned", "device", device_id,
+                 {"deployments_removed": removed})
     db.commit()

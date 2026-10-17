@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     admin_password: str = "admin123"
     approver_password: str = "approver123"
     operator_password: str = "operator123"
+    viewer_password: str = "viewer123"
     # Si es verdadero, en una base de datos vacía se cargan los dispositivos y modelos del laboratorio
     seed_demo_data: bool = True
 

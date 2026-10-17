@@ -58,7 +58,7 @@ def run(db: Session) -> None:
         for username, role, pwd in [("admin", "admin", s.admin_password),
                                     ("approver", "approver", s.approver_password),
                                     ("operator", "operator", s.operator_password),
-                                    ("viewer", "viewer", "viewer123")]:
+                                    ("viewer", "viewer", s.viewer_password)]:
             db.add(User(username=username, role=role, password_hash=hash_password(pwd)))
         db.commit()
 

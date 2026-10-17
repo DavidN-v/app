@@ -38,6 +38,9 @@ export interface Device {
   current_model: ModelBrief | null;
 }
 
+/** Datos para dar de alta un dispositivo. */
+export type NewDevice = Pick<Device, 'id' | 'name' | 'kind' | 'role' | 'location'>;
+
 /** Versión de un modelo en el registro. */
 export interface MLModel extends ModelBrief {
   task: string;

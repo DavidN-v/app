@@ -599,3 +599,6 @@ tr.slow { background: color-mix(in srgb, #facc15 6%, transparent); }
 .pending-tag { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #facc15; }
 tr.focused { animation: focus-flash 2.4s var(--ease-out); outline: 1px solid #38bdf8; outline-offset: -1px; }
 @keyframes focus-flash { 0%, 30% { background: color-mix(in srgb, #38bdf8 22%, transparent); } }
+
+// Texto solo para lectores de pantalla (no se ve, pero se lee)
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
