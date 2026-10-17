@@ -1,5 +1,4 @@
-// Registro de ECharts por partes: solo se incluyen en la aplicación los tipos de gráfica y
-// componentes que se usan, lo que reduce mucho el tamaño de la descarga.
+// Solo se registran las gráficas y componentes que se usan, para reducir el bundle
 import { GaugeChart, LineChart, PieChart } from 'echarts/charts';
 import {
   GridComponent,

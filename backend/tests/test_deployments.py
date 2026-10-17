@@ -23,13 +23,11 @@ def test_happy_path_deploy_and_ack(client, auth, mqtt, db):
     dep = r.json()
     assert dep["status"] == "pending"
 
-    # Se publicó la orden por MQTT con hash e URL
     device_id, command = client.app.state.bridge.published[-1]
     assert device_id == "rpi5-vision"
     assert command["sha256"] == model["sha256"]
     assert command["deployment_id"] == dep["id"]
 
-    # El dispositivo confirma
     mqtt("edge/rpi5-vision/deploy/ack", {"deployment_id": dep["id"], "status": "succeeded"})
     assert db.get(Device, "rpi5-vision").current_model_id == model["id"]
     assert db.get(MLModel, model["id"]).status == "deployed"
@@ -113,3 +111,22 @@ def test_ack_from_wrong_device_is_ignored(client, auth, mqtt, db):
     mqtt("edge/rpi5-genai/deploy/ack", {"deployment_id": dep["id"], "status": "succeeded"})
     deps = client.get("/api/deployments", headers=auth("viewer")).json()
     assert deps[0]["status"] == "pending"
+
+
+def test_successful_deploy_closes_previous_failed_alert(client, auth, mqtt):
+    model = approved_model(client, auth)
+    bring_online(mqtt)
+
+    def deploy_and_ack(status):
+        dep = client.post("/api/deployments", headers=auth("operator"),
+                          json={"model_id": model["id"], "device_id": "rpi5-vision"}).json()
+        mqtt("edge/rpi5-vision/deploy/ack", {"deployment_id": dep["id"], "status": status, "message": "x"})
+
+    def open_failed():
+        alerts = client.get("/api/alerts?status=open", headers=auth("viewer")).json()
+        return [a for a in alerts if a["kind"] == "deployment_failed"]
+
+    deploy_and_ack("failed")
+    assert len(open_failed()) == 1
+    deploy_and_ack("succeeded")
+    assert open_failed() == []

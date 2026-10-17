@@ -1,11 +1,4 @@
-"""Detector de anomalías en la telemetría de la flota.
-
-Para cada dispositivo y cada métrica (CPU, RAM, temperatura) se guardan las últimas lecturas.
-Una lectura nueva se considera anómala si se aleja mucho de lo habitual, medido con la
-puntuación z: z = (valor - media) / desviación típica. Es decir, cuántas desviaciones típicas
-se separa el valor de la media reciente. Con el umbral por defecto (4) se marcan solo los
-cambios muy bruscos, lo que evita falsas alarmas por el ruido normal de las medidas.
-"""
+"""Detector de anomalías en la telemetría de la flota."""
 
 import math
 from collections import defaultdict, deque
@@ -16,7 +9,6 @@ METRICS = ("cpu", "ram", "temp")
 
 @dataclass
 class Verdict:
-    """Resultado de analizar una lectura."""
 
     device: str
     anomalous: bool
@@ -27,7 +19,6 @@ class Verdict:
 
 
 class RollingStats:
-    """Últimos valores de una métrica y cálculo de su puntuación z."""
 
     def __init__(self, window: int) -> None:
         self.values: deque[float] = deque(maxlen=window)
@@ -46,14 +37,12 @@ class RollingStats:
 
 
 class AnomalyDetector:
-    """Mantiene una historia separada para cada pareja (dispositivo, métrica)."""
 
     def __init__(self, window: int = 60, threshold: float = 4.0) -> None:
         self.threshold = threshold
         self.stats: dict[tuple[str, str], RollingStats] = defaultdict(lambda: RollingStats(window))
 
     def observe(self, device: str, reading: dict) -> Verdict:
-        """Juzga la lectura contra la historia del dispositivo y después la incorpora."""
         worst, worst_z = None, 0.0
         for metric in METRICS:
             value = reading.get(metric)

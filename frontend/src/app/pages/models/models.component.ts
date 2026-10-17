@@ -12,10 +12,6 @@ import { ToastService, UNDO_WINDOW_MS } from '../../shared/toast.service';
 type Filter = ModelStatus | 'all';
 type ModelKey = 'name' | 'framework' | 'license' | 'owner' | 'status' | 'created';
 
-/**
- * Página del registro de modelos: listado por estado, ficha de detalle, registro de nuevas
- * versiones y acciones de aprobación y retirada según el rol del usuario.
- */
 @Component({
   selector: 'eg-models',
   imports: [StatusBadgeComponent, ReactiveFormsModule, DatePipe, KeyValuePipe],
@@ -29,7 +25,6 @@ export class ModelsComponent implements OnInit {
   private readonly undoMs = inject(UNDO_WINDOW_MS);
   protected readonly query = signal('');
   protected readonly sort = new SortState<ModelKey>();
-  /** Modelos con una retirada en cuenta atrás (se puede deshacer) */
   protected readonly retiringSoon = signal<ReadonlySet<number>>(new Set());
 
   protected readonly models = signal<MLModel[]>([]);
@@ -95,7 +90,6 @@ export class ModelsComponent implements OnInit {
     });
   }
 
-  /** Separación de funciones: nadie puede aprobar un modelo que ha registrado él mismo. */
   canApprove(m: MLModel): boolean {
     return m.status === 'draft' && this.auth.can('approver') && m.owner !== this.auth.user()?.username;
   }
@@ -109,14 +103,12 @@ export class ModelsComponent implements OnInit {
     if (this.retiring()?.id !== m.id) this.retiring.set(null);
   }
 
-  /** La retirada pide el motivo dentro de la ficha, no en una ventana del navegador. */
   startRetire(m: MLModel): void {
     this.selected.set(m);
     this.retireReason.set('');
     this.retiring.set(m);
   }
 
-  /** La retirada es irreversible: se envía tras unos segundos en los que se puede deshacer. */
   confirmRetire(m: MLModel): void {
     const reason = this.retireReason().trim();
     if (!reason) return;
@@ -164,7 +156,6 @@ export class ModelsComponent implements OnInit {
     });
   }
 
-  /** Registra el modelo del formulario. */
   submit(): void {
     if (this.form.invalid) return;
     const value = this.form.getRawValue();

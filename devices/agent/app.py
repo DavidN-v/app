@@ -1,10 +1,4 @@
-"""Raspberry Pi 5 · Agente de dispositivos (real en contenedor).
-
-- Envía su propia telemetría con el agente edge, como cualquier otro dispositivo.
-- Escucha la telemetría de toda la flota por MQTT y analiza cada lectura con un detector de
-  anomalías (ver anomaly.py). Ese detector es su "modelo": su latencia y su confianza son reales.
-- Pantalla local en :8103 con estado, tiempo activo y tráfico MQTT de los últimos 60 s.
-"""
+"""Raspberry Pi 5 · Agente de dispositivos (real en contenedor)."""
 
 import json
 import logging
@@ -29,13 +23,10 @@ PORT = int(os.getenv("AGENT_PORT", "8103"))
 
 
 def reject_model_files(command: dict, path: Path) -> None:
-    """El detector de anomalías es código del propio dispositivo, no un archivo de modelo:
-    se rechaza el despliegue para que la plataforma no dé por instalado algo que no se usa."""
     raise RuntimeError("este dispositivo no carga archivos de modelo; se actualiza con una nueva imagen")
 
 
 class Traffic:
-    """Mensajes MQTT enviados y recibidos por segundo (últimos 60 s)."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -63,7 +54,6 @@ class Traffic:
 
 
 class Device:
-    """El dispositivo agente: conexión MQTT, detector y datos que muestra su pantalla."""
 
     def __init__(self) -> None:
         self.started = time.time()
@@ -82,7 +72,6 @@ class Device:
         self.client.on_disconnect = lambda *a: setattr(self, "connected", False)
         self.client.on_message = self.on_message
 
-    # El agente publica a través de este método: así se cuentan los mensajes enviados
     def publish(self, topic, payload, qos=0, retain=False):
         self.traffic.add(sent=1)
         return self.client.publish(topic, payload, qos=qos, retain=retain)
@@ -105,7 +94,6 @@ class Device:
         self.agent.on_message(client, userdata, msg)
 
     def classify(self, device: str, payload: bytes) -> None:
-        """Analiza una lectura de otro dispositivo y guarda las anomalías para la pantalla."""
         try:
             reading = json.loads(payload)
         except ValueError:
@@ -119,7 +107,6 @@ class Device:
                                        "value": reading.get(verdict.worst_metric), "ts": time.time()})
 
     def state(self) -> dict:
-        """Datos que consulta la pantalla local cada segundo."""
         sent, received = self.traffic.snapshot()
         sysinfo = system.collect()
         return {
@@ -138,7 +125,6 @@ PAGE = (Path(__file__).parent / "screen.html").read_bytes()
 
 
 def make_handler(device: Device):
-    """Servidor web de la pantalla local."""
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args) -> None:
             pass

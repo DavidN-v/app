@@ -3,24 +3,12 @@ import { Subject } from 'rxjs';
 import { AuthService } from './auth.service';
 import { Alert, Device, LiveEvent, Point } from './models';
 
-/** Puntos de latencia que se conservan por dispositivo (5 minutos a 2 mensajes por segundo). */
 export const SERIES_WINDOW = 600;
-/** Alertas recientes que se guardan para el panel de la vista general. */
 const MAX_FEED = 50;
-/** Espera máxima entre intentos de reconexión. */
 const MAX_BACKOFF_MS = 15_000;
 
-/** Cambios recibidos en vivo que se superponen a los datos cargados por REST. */
 type LivePatch = Partial<Pick<Device, 'cpu' | 'ram' | 'temp' | 'latency_ms' | 'status' | 'last_seen'>>;
 
-/**
- * Conexión en tiempo real con la API mediante WebSocket.
- *
- * Guarda en señales el estado en vivo de la flota (últimas lecturas, latencias y alertas) y
- * reenvía cada evento a quien esté suscrito a events$. Si la conexión se corta, se reintenta
- * esperando cada vez el doble de tiempo (0,5 s, 1 s, 2 s...) hasta un máximo de 15 s, para no
- * saturar al servidor mientras se recupera.
- */
 @Injectable({ providedIn: 'root' })
 export class LiveService implements OnDestroy {
   private readonly auth = inject(AuthService);
@@ -39,7 +27,6 @@ export class LiveService implements OnDestroy {
   private counter = 0;
   private rateTimer: ReturnType<typeof setInterval> | null = null;
 
-  /** Abre la conexión y empieza a contar los mensajes por segundo. */
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
@@ -50,7 +37,6 @@ export class LiveService implements OnDestroy {
     this.open();
   }
 
-  /** Cierra la conexión (al cerrar sesión). */
   stop(): void {
     this.stopped = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
@@ -64,14 +50,12 @@ export class LiveService implements OnDestroy {
     this.stop();
   }
 
-  /** Carga el histórico de latencias que devuelve /api/overview. */
   seedLatency(series: Record<string, Point[]>): void {
     this.latency.set(
       Object.fromEntries(Object.entries(series).map(([k, v]) => [k, v.slice(-SERIES_WINDOW)])),
     );
   }
 
-  /** Aplica un evento al estado. Público para poder probarlo sin red. */
   handle(event: LiveEvent): void {
     this.counter++;
     switch (event.type) {
@@ -105,18 +89,15 @@ export class LiveService implements OnDestroy {
     this.events$.next(event);
   }
 
-  /** Mezcla el estado REST con los parches en vivo. */
   merge(devices: Device[]): Device[] {
     const patches = this.patches();
     return devices.map((d) => ({ ...d, ...(patches[d.id] ?? {}) }) as Device);
   }
 
-  /** Acumula los cambios recibidos para un dispositivo. */
   private patch(id: string, p: LivePatch): void {
     this.patches.update((all) => ({ ...all, [id]: { ...all[id], ...p } }));
   }
 
-  /** Abre el WebSocket con el token de sesión y programa la reconexión si se cierra. */
   private open(): void {
     const token = this.auth.token();
     if (!token || this.stopped) return;

@@ -1,12 +1,4 @@
-"""Raspberry Pi 5 · Modelo de lenguaje (dispositivo real en contenedor).
-
-- Un servidor llama.cpp ejecuta Qwen2.5-0.5B-Instruct (GGUF Q4_K_M) en CPU, como en una Raspberry Pi 5.
-- Este proceso es el asistente: construye el contexto con los datos reales de la flota
-  (API de gobernanza), pregunta al modelo y muestra el chat en su pantalla local (:8102).
-- Cada respuesta se reporta a la plataforma: latencia por token y tokens/s reales.
-- Si nadie pregunta, el operador automático hace una consulta cada AUTO_ASK_S segundos
-  para que la plataforma siempre tenga métricas frescas.
-"""
+"""Raspberry Pi 5 · Modelo de lenguaje (dispositivo real en contenedor)."""
 
 import json
 import logging
@@ -40,7 +32,6 @@ AUTO_QUESTIONS = [
 
 
 class Assistant:
-    """Atiende las preguntas: reúne el contexto, consulta al modelo y guarda el historial."""
 
     def __init__(self, agent: EdgeAgent, llm: LlamaClient, gov: GovernanceClient) -> None:
         self.agent, self.llm, self.gov = agent, llm, gov
@@ -50,7 +41,6 @@ class Assistant:
         self.stats = {"tokens_per_s": None, "ms_per_token": None, "total_ms": None, "answers": 0}
 
     def ask(self, question: str, source: str) -> dict:
-        """Responde una pregunta. source indica si la hizo una persona o el operador automático."""
         with self.lock:
             try:
                 devices, alerts = self.gov.snapshot()
@@ -81,7 +71,6 @@ class Assistant:
             return entry
 
     def auto_loop(self) -> None:
-        """Hace una pregunta de la lista cuando nadie ha preguntado en los últimos AUTO_ASK_S segundos."""
         i = 0
         while True:
             time.sleep(AUTO_ASK_S)
@@ -95,14 +84,11 @@ PAGE = (Path(__file__).parent / "screen.html").read_bytes()
 
 
 def reject_hot_swap(command: dict, path: Path) -> None:
-    """El modelo de lenguaje lo sirve llama.cpp, que solo lo carga al arrancar. Se rechaza el
-    despliegue para que la plataforma no crea que el modelo nuevo ya está en marcha."""
     raise RuntimeError("el modelo de lenguaje se cambia reiniciando el servidor llama.cpp con el "
                        "nuevo archivo (variables del servicio genai-llm)")
 
 
 def make_handler(assistant: Assistant):
-    """Servidor web de la pantalla local: la página, el estado y el envío de preguntas."""
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args) -> None:
             pass
@@ -145,7 +131,6 @@ def make_handler(assistant: Assistant):
 
 
 def main() -> None:
-    """Conecta con MQTT, con el modelo de lenguaje y con la API, y arranca la pantalla web."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     client = connection.create_client(DEVICE_ID)
     agent = EdgeAgent(DEVICE_ID, client, ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "/data/models"))),

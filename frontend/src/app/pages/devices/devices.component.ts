@@ -12,19 +12,12 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { TimeAgoPipe } from '../../shared/time-ago.pipe';
 import { ToastService, UNDO_WINDOW_MS } from '../../shared/toast.service';
 
-/** Nombre del tipo de hardware. */
 const KIND_LABEL: Record<Device['kind'], string> = {
   rpi5: 'Raspberry Pi 5',
   arduino: 'Arduino',
   esp32: 'ESP32',
 };
 
-/**
- * Página de dispositivos: una fila por dispositivo con su estado, métricas actuales y modelo
- * instalado. Los datos se cargan una vez y después se actualizan con los eventos en vivo.
- * El administrador puede dar de alta dispositivos nuevos (por ejemplo, una placa física recién
- * instalada) y darlos de baja. Solo los dispositivos dados de alta pueden enviar datos.
- */
 @Component({
   selector: 'eg-devices',
   imports: [StatusBadgeComponent, TimeAgoPipe, MetricComponent, ReactiveFormsModule],
@@ -126,7 +119,6 @@ export class DevicesComponent implements OnInit {
   private readonly undoWindow = inject(UNDO_WINDOW_MS);
   protected readonly auth = inject(AuthService);
   private readonly base = signal<Device[]>([]);
-  /** Si la dirección incluye ?focus=id (al pulsar una línea del registro), se resalta ese dispositivo. */
   readonly focus = input<string | undefined>();
   protected readonly sort = new SortState<'name' | 'cpu' | 'ram' | 'temp' | 'latency' | 'status'>();
   protected readonly query = signal('');
@@ -136,7 +128,6 @@ export class DevicesComponent implements OnInit {
   protected readonly colorFor = colorFor;
   protected readonly showForm = signal(false);
   protected readonly busy = signal(false);
-  /** Dispositivos con una baja en cuenta atrás (todavía se puede deshacer). */
   protected readonly removing = signal<ReadonlySet<string>>(new Set());
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
@@ -173,7 +164,6 @@ export class DevicesComponent implements OnInit {
     });
   }
 
-  /** Da de alta el dispositivo del formulario. */
   register(): void {
     this.busy.set(true);
     this.api.registerDevice(this.form.getRawValue()).subscribe({
@@ -192,7 +182,6 @@ export class DevicesComponent implements OnInit {
     });
   }
 
-  /** La baja no se puede deshacer en el servidor: se envía tras unos segundos en los que se puede cancelar. */
   decommission(d: Device): void {
     const mark = (on: boolean) =>
       this.removing.update((s) => {

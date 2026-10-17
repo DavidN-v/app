@@ -14,10 +14,8 @@ import { NotifyService } from '../../core/notify.service';
 
 type Filter = Alert['status'] | 'active' | 'all';
 type AlertKey = 'severity' | 'kind' | 'device' | 'created' | 'status';
-/** Orden de gravedad para ordenar la tabla. */
 const SEV_RANK: Record<string, number> = { critical: 3, warning: 2, info: 1 };
 
-/** Descripción en español de cada tipo de alerta. */
 const KIND_LABELS: Record<string, string> = {
   high_temperature: 'Temperatura',
   high_cpu: 'CPU',
@@ -29,10 +27,6 @@ const KIND_LABELS: Record<string, string> = {
   unregistered_device: 'Dispositivo no registrado',
 };
 
-/**
- * Página de alertas: lista filtrable y ordenable desde la que un operador puede reconocer
- * o resolver cada alerta. Se recarga sola cuando llega o se cierra una alerta.
- */
 @Component({
   selector: 'eg-alerts',
   imports: [StatusBadgeComponent, DatePipe],
@@ -153,7 +147,6 @@ export class AlertsComponent implements OnInit {
       .subscribe(() => this.load());
   }
 
-  /** Reconoce o resuelve una alerta. */
   act(alert: Alert, status: 'acknowledged' | 'resolved'): void {
     this.api.actOnAlert(alert.id, status).subscribe({
       next: (updated) => {

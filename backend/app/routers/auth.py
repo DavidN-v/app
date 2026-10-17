@@ -13,8 +13,6 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 def _authenticate(db: Session, username: str, password: str) -> TokenOut:
-    """Comprueba usuario y contraseña y entrega un token de sesión.
-    El mensaje de error es el mismo en ambos casos para no revelar qué usuarios existen."""
     user = db.query(User).filter_by(username=username).one_or_none()
     if user is None or not verify_password(password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario o contraseña incorrectos")
@@ -23,17 +21,14 @@ def _authenticate(db: Session, username: str, password: str) -> TokenOut:
 
 @router.post("/login", response_model=TokenOut)
 def login(body: LoginIn, db: Session = Depends(get_db)):
-    """Inicio de sesión desde la consola."""
     return _authenticate(db, body.username, body.password)
 
 
 @router.post("/token", response_model=TokenOut, include_in_schema=False)
 def token(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Misma operación en el formato que espera el botón "Authorize" de la documentación de la API."""
     return _authenticate(db, form.username, form.password)
 
 
 @router.get("/me")
 def me(user: User = Depends(current_user)):
-    """Devuelve el usuario de la sesión actual."""
     return {"username": user.username, "role": user.role}

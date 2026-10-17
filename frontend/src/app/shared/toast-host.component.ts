@@ -1,10 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ToastService } from './toast.service';
 
-/** Etiqueta que encabeza cada tipo de aviso. */
 const TAG = { ok: 'OK', info: 'INFO', warn: 'AVISO', crit: 'ALERTA' } as const;
 
-/** Zona de la pantalla donde se apilan los avisos emergentes. */
 @Component({
   selector: 'eg-toasts',
   changeDetection: ChangeDetectionStrategy.OnPush,

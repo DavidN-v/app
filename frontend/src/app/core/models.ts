@@ -1,14 +1,8 @@
-/**
- * Tipos de datos que intercambia la consola con la API.
- * Reflejan los esquemas del backend (schemas.py) para que TypeScript detecte errores
- * de uso de los datos al compilar, antes de que lleguen al navegador.
- */
 
 export type Role = 'admin' | 'approver' | 'operator' | 'viewer';
 export type ModelStatus = 'draft' | 'approved' | 'deployed' | 'retired';
 export type Severity = 'info' | 'warning' | 'critical';
 
-/** Sesión iniciada: token y datos del usuario. */
 export interface Session {
   access_token: string;
   username: string;
@@ -22,7 +16,6 @@ export interface ModelBrief {
   framework: string;
 }
 
-/** Dispositivo edge con su último estado conocido. Los valores nulos indican que no hay lectura. */
 export interface Device {
   id: string;
   name: string;
@@ -38,10 +31,8 @@ export interface Device {
   current_model: ModelBrief | null;
 }
 
-/** Datos para dar de alta un dispositivo. */
 export type NewDevice = Pick<Device, 'id' | 'name' | 'kind' | 'role' | 'location'>;
 
-/** Versión de un modelo en el registro. */
 export interface MLModel extends ModelBrief {
   task: string;
   artifact_uri: string;
@@ -56,13 +47,11 @@ export interface MLModel extends ModelBrief {
   created_at: string;
 }
 
-/** Datos necesarios para registrar un modelo nuevo. */
 export type NewModel = Pick<
   MLModel,
   'name' | 'version' | 'framework' | 'task' | 'artifact_uri' | 'sha256' | 'signature' | 'license'
 > & { metrics?: Record<string, unknown> };
 
-/** Etapas por las que pasa un despliegue, en orden. */
 export type DeployStage = 'requested' | 'downloading' | 'verifying' | 'installing' | 'confirmed' | 'failed';
 
 export interface Deployment {
@@ -77,7 +66,6 @@ export interface Deployment {
   finished_at: string | null;
 }
 
-/** Resultado de comprobar las políticas antes de desplegar. */
 export interface PolicyCheck {
   allowed: boolean;
   violations: string[];
@@ -126,7 +114,6 @@ export interface LatencyHistory {
   series: Record<string, Point[]>;
 }
 
-/** Punto de una serie temporal: [instante en segundos, valor]. */
 export type Point = [number, number];
 
 export interface Overview {
@@ -138,7 +125,6 @@ export interface Overview {
   latency_series: Record<string, Point[]>;
 }
 
-/** Eventos que llegan por el WebSocket; el campo type indica de qué tipo es cada uno. */
 export type LiveEvent =
   | { type: 'telemetry'; data: { id: string; cpu: number; ram: number; temp: number | null; ts: string } }
   | { type: 'inference'; data: { id: string; latency_ms: number; confidence: number | null; model: string } }

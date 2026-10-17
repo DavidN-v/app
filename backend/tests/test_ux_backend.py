@@ -18,7 +18,6 @@ def pending_deployment(client, auth, mqtt):
     return r.json()
 
 
-# --- Progreso de los despliegues -------------------------------------------
 
 def test_deployment_starts_as_requested(client, auth, mqtt):
     assert pending_deployment(client, auth, mqtt)["stage"] == "requested"
@@ -69,14 +68,12 @@ def test_fresh_deployment_does_not_time_out(client, auth, mqtt, db):
     assert jobs.check_deploy_timeouts(db) == []
 
 
-# --- RAM ---------------------------------------------------------------------
 
 def test_high_ram_alert_uses_policy(client, auth, mqtt, db):
     mqtt("edge/rpi5-genai/telemetry", {"cpu": 10, "ram": 91, "temp": 50})
     assert db.query(Alert).filter_by(kind="high_ram").count() == 1
 
 
-# --- Historial de latencia ----------------------------------------------------
 
 def test_latency_5m_returns_recent_points(client, auth, mqtt):
     mqtt("edge/uno-q/inference", {"model": "yolo-nano", "version": "8.1", "latency_ms": 24})
@@ -104,7 +101,6 @@ def test_latency_rejects_unknown_window(client, auth):
     assert client.get("/api/metrics/latency?window=7d", headers=auth("viewer")).status_code == 422
 
 
-# --- Migración ----------------------------------------------------------------
 
 def test_migration_adds_missing_column(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
@@ -114,7 +110,6 @@ def test_migration_adds_missing_column(tmp_path):
     assert migrate.ensure_columns(engine) == []
 
 
-# --- Logs sin secretos ---------------------------------------------------------
 
 def test_access_log_redacts_ws_token():
     import logging

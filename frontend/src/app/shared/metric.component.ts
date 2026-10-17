@@ -3,14 +3,8 @@ import { RouterLink } from '@angular/router';
 import { PolicyStore } from '../core/policy.store';
 
 type Metric = 'cpu' | 'ram' | 'temp' | 'latency';
-/** Unidad que se muestra detrás de cada métrica. */
 const SUFFIX: Record<Metric, string> = { cpu: '%', ram: '%', temp: '°', latency: 'ms' };
 
-/**
- * Muestra el valor de una métrica. Si supera el umbral de su política aparece en rojo,
- * indica el límite al pasar el ratón y enlaza con la página de Políticas para poder
- * consultar o ajustar ese límite.
- */
 @Component({
   selector: 'eg-metric',
   imports: [RouterLink],

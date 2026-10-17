@@ -6,7 +6,6 @@ from detector import COCO_ES, letterbox, nms, postprocess
 
 
 def yolo_output(*boxes):
-    """Construye una salida falsa de YOLOv8: [1, 84, anclas] con (cx, cy, w, h, scores...)."""
     out = np.zeros((1, 84, len(boxes)), dtype=np.float32)
     for i, (cx, cy, w, h, cls, score) in enumerate(boxes):
         out[0, :4, i] = (cx, cy, w, h)

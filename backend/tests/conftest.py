@@ -50,7 +50,6 @@ def auth(client):
 
 @pytest.fixture
 def mqtt(db):
-    """Simula la llegada de un mensaje MQTT al ingestor."""
 
     def send(topic: str, payload, retained: bool = False) -> None:
         raw = payload.encode() if isinstance(payload, str) else json.dumps(payload).encode()

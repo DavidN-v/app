@@ -1,8 +1,4 @@
-// ESP32: índice de confort ambiental calculado con una red neuronal (TFLite Micro)
-// y envío de los resultados a la plataforma por MQTT.
-//
-// El ESP32 es un microcontrolador: no tiene sistema operativo como una Raspberry Pi, así que
-// todo el programa es un bucle que se repite continuamente (función loop).
+// ESP32: índice de confort con TFLite Micro y envío por MQTT.
 //
 // Temas MQTT:
 //   edge/esp32-env/status      online/offline (el broker publica offline si se pierde la conexión)
@@ -14,34 +10,53 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <time.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 #include <esp_heap_caps.h>
 
 #include "model_runner.h"
+#include "sensors.h"
+
+// Con MQTT_TLS la conexión va cifrada y el dispositivo se identifica con su certificado.
+// certs.h se genera con firmware/esp32/generar-certs-h.sh y no se sube al repositorio.
+#ifdef MQTT_TLS
+#include "certs.h"
+#endif
+
+#ifndef MQTT_PORT
+#ifdef MQTT_TLS
+#define MQTT_PORT 8883
+#else
+#define MQTT_PORT 1883
+#endif
+#endif
 
 #ifndef WIFI_CHANNEL
 #define WIFI_CHANNEL 0  // 0 = escanear todos los canales
 #endif
 
-// Nombre y versión con los que el modelo figura en el registro de la plataforma
 static const char *MODEL_NAME = "env-regressor";
 static const char *MODEL_VERSION = "1.1";
 // Periodos en milisegundos: telemetría cada 5 s e inferencia cada segundo
 static const uint32_t TELEMETRY_MS = 5000;
 static const uint32_t INFERENCE_MS = 1000;
 
+#ifdef MQTT_TLS
+WiFiClientSecure net;
+#else
 WiFiClient net;
+#endif
 PubSubClient mqtt(net);
 ModelRunner runner;
+Sensors sensors(runner);
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);  // OLED I2C 0x3C en SDA=21, SCL=22
 
-// Últimos valores mostrados en la pantalla del dispositivo
 float lastT = 0, lastH = 0, lastCo2 = 0, lastComfort = 0, lastLatency = 0;
 uint32_t inferences = 0;
 
-// Dibuja la pantalla OLED: estado de la conexión, lecturas, índice de confort con una barra
-// y latencia de la última inferencia
+// Pantalla OLED: conexión, lecturas, índice de confort y latencia
 void drawScreen(const char *status) {
   oled.clearDisplay();
   oled.setTextColor(SSD1306_WHITE);
@@ -65,10 +80,8 @@ void drawScreen(const char *status) {
   oled.display();
 }
 
-// Construye el tema MQTT propio del dispositivo, por ejemplo edge/esp32-env/telemetry
 String topic(const char *suffix) { return String("edge/") + DEVICE_ID + "/" + suffix; }
 
-// Convierte el documento a texto JSON y lo publica
 void publishJson(const char *suffix, JsonDocument &doc, bool retain = false) {
   char buf[256];
   size_t n = serializeJson(doc, buf, sizeof(buf));
@@ -76,8 +89,7 @@ void publishJson(const char *suffix, JsonDocument &doc, bool retain = false) {
 }
 
 void onMessage(char *t, byte *payload, unsigned int len) {
-  // El ESP32 no tiene memoria suficiente para descargar e instalar modelos a distancia:
-  // se rechaza la orden de forma explícita para que la plataforma registre el fallo.
+  // Sin memoria para instalar modelos OTA: se rechaza para que la plataforma registre el fallo
   JsonDocument cmd;
   if (deserializeJson(cmd, payload, len)) return;
   JsonDocument ack;
@@ -87,7 +99,6 @@ void onMessage(char *t, byte *payload, unsigned int len) {
   publishJson("deploy/ack", ack);
 }
 
-// Conecta a la red WiFi y espera hasta conseguirlo
 void connectWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS, WIFI_CHANNEL);
@@ -97,10 +108,9 @@ void connectWifi() {
   Serial.printf(" ok, IP %s\r\n", WiFi.localIP().toString().c_str());
 }
 
-// Conecta con el broker. Al conectar deja registrado el mensaje "offline" que el broker
-// publicará si la conexión se pierde, anuncia "online" y se suscribe a sus órdenes
+// Deja el LWT "offline", anuncia "online" y se suscribe a sus órdenes
 void connectMqtt() {
-  mqtt.setServer(MQTT_HOST, 1883);
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMessage);
   drawScreen("MQTT...");
   while (!mqtt.connected()) {
@@ -117,7 +127,7 @@ void connectMqtt() {
   }
 }
 
-// Envía el uso de memoria, el porcentaje de tiempo dedicado a inferir y la temperatura del chip
+// Memoria, % de tiempo en inferencia y temperatura del chip
 void publishTelemetry() {
   JsonDocument doc;
   size_t total = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
@@ -131,9 +141,9 @@ void publishTelemetry() {
   publishJson("telemetry", doc);
 }
 
-// Lee los sensores, ejecuta el modelo, mide cuánto tarda y publica el resultado
 void publishInference() {
-  float features[3] = {runner.readTemperature(), runner.readHumidity(), runner.readCo2()};
+  sensors.update();
+  float features[3] = {sensors.temperature(), sensors.humidity(), sensors.co2()};
   uint32_t t0 = micros();
   float prediction = runner.predict(features);
   float latency_ms = (micros() - t0) / 1000.0f;
@@ -152,17 +162,26 @@ void publishInference() {
   drawScreen("ONLINE");
 }
 
-// Se ejecuta una vez al encender: pantalla, modelo, WiFi y MQTT
 void setup() {
   Serial.begin(115200);
   Wire.begin(21, 22);
   if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) Serial.println("OLED no encontrada");
   runner.begin();
+  sensors.begin();
   connectWifi();
+#ifdef MQTT_TLS
+  // Para comprobar la validez de los certificados el ESP32 necesita la fecha actual
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  Serial.print("Sincronizando la hora");
+  while (time(nullptr) < 1700000000) { delay(250); Serial.print("."); }
+  Serial.println(" ok");
+  net.setCACert(CA_CERT);
+  net.setCertificate(DEVICE_CERT);
+  net.setPrivateKey(DEVICE_KEY);
+#endif
   connectMqtt();
 }
 
-// Bucle principal: mantiene la conexión y lanza cada tarea cuando le toca según millis()
 void loop() {
   static uint32_t lastTelemetry = 0, lastInference = 0;
   if (!mqtt.connected()) connectMqtt();

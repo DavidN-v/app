@@ -1,9 +1,4 @@
-"""Conexión entre la API y el broker MQTT.
-
-MQTT es un protocolo de mensajería ligero muy usado en dispositivos IoT: los dispositivos
-publican mensajes en temas (topics) y los interesados se suscriben a ellos. La API se suscribe
-a todos los temas edge/# para recibir la telemetría y publica las órdenes de despliegue.
-"""
+"""Conexión entre la API y el broker MQTT."""
 
 import json
 import logging
@@ -18,10 +13,6 @@ log = logging.getLogger(__name__)
 
 
 class MqttBridge:
-    """Cliente MQTT de la API: recibe los mensajes de los dispositivos y envía despliegues.
-
-    La librería paho atiende la red en un hilo propio y se reconecta sola si el broker se cae.
-    """
 
     def __init__(self) -> None:
         s = get_settings()
@@ -44,7 +35,6 @@ class MqttBridge:
         self.client.disconnect()
 
     def publish_deploy(self, device_id: str, command: dict) -> None:
-        """Envía la orden de despliegue. QoS 1 garantiza que el broker la entregue al menos una vez."""
         self.client.publish(f"edge/{device_id}/deploy", json.dumps(command), qos=1)
 
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
@@ -53,7 +43,6 @@ class MqttBridge:
         client.subscribe("edge/#", qos=1)
 
     def _on_message(self, client, userdata, msg) -> None:
-        """Procesa cada mensaje con su propia sesión de base de datos."""
         if msg.topic.endswith("/deploy"):
             return  # órdenes publicadas por nosotros mismos
         with SessionLocal() as db:
@@ -64,8 +53,6 @@ class MqttBridge:
 
 
 class NullBridge:
-    """Sustituto sin red que se usa en las pruebas o cuando MQTT está desactivado.
-    Guarda las órdenes publicadas para que las pruebas puedan comprobarlas."""
 
     def __init__(self) -> None:
         self.published: list[tuple[str, dict]] = []

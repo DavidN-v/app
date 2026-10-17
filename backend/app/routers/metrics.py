@@ -16,19 +16,15 @@ router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
 # Ventana -> (duración en segundos, tamaño de cada grupo de puntos en segundos)
 WINDOWS = {"5m": (300, 0), "1h": (3600, 60), "24h": (86400, 300)}
-# Máximo de puntos por dispositivo en la ventana corta, para no saturar la gráfica
 MAX_RAW_POINTS = 300
 
 
 @router.get("/latency")
 def latency(window: Literal["5m", "1h", "24h"] = "5m", db: Session = Depends(get_db),
             _: User = Depends(current_user)) -> dict:
-    """Devuelve una serie de puntos [instante, latencia] por dispositivo."""
     span, bucket = WINDOWS[window]
     since = time.time() - span
     if bucket == 0:
-        # Ventana corta: puntos individuales guardados en memoria;
-        # si hay demasiados, se toma uno de cada varios
         out = {}
         for device_id, points in hub.latency_series().items():
             recent = [p for p in points if p[0] >= since]

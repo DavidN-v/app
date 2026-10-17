@@ -1,13 +1,4 @@
-"""Origen de las imágenes que analiza el dispositivo de visión.
-
-- SceneSource: fotografías fijas que simulan una cámara (encuadre que tiembla, luz variable y,
-  de forma programada, una lente sucia). Es la opción por defecto en la emulación.
-- CameraSource: una cámara real. Se activa con la variable VISION_CAMERA, que admite:
-    0, 1...              número de una cámara USB
-    /dev/video0          ruta del dispositivo de vídeo en Linux
-    tcp://... rtsp://... http://...   vídeo por red, por ejemplo el que emite rpicam-vid con el
-                         módulo de cámara oficial de Raspberry Pi
-"""
+"""Origen de las imágenes que analiza el dispositivo de visión."""
 
 import logging
 import random
@@ -19,7 +10,6 @@ log = logging.getLogger("vision")
 
 
 def camera_frame(scene: Image.Image, dirty: bool) -> Image.Image:
-    """Simula la cámara: encuadre que tiembla un poco, luz que varía y, si toca, lente sucia."""
     w, h = scene.size
     dx, dy = random.randint(0, w // 20), random.randint(0, h // 20)
     frame = scene.crop((dx, dy, w - w // 20 + dx, h - h // 20 + dy))
@@ -32,8 +22,6 @@ def camera_frame(scene: Image.Image, dirty: bool) -> Image.Image:
 
 
 class SceneSource:
-    """Recorre las escenas cambiando cada `scene_seconds` y ensucia la lente de forma periódica:
-    cada `dirty_every` segundos, durante `dirty_for` segundos (dirty_every = 0 lo desactiva)."""
 
     def __init__(self, scenes: list[Image.Image], scene_seconds: float, dirty_every: float,
                  dirty_for: float) -> None:
@@ -47,7 +35,6 @@ class SceneSource:
         return self.scenes[0].width
 
     def read(self) -> tuple[Image.Image, str]:
-        """Devuelve el fotograma y el estado de la lente que se muestra en la pantalla."""
         now = time.time()
         if now - self.scene_since > self.scene_seconds:
             self.index, self.scene_since = (self.index + 1) % len(self.scenes), now
@@ -57,13 +44,11 @@ class SceneSource:
 
 
 def parse_camera(spec: str) -> int | str:
-    """Convierte el valor de VISION_CAMERA en lo que espera OpenCV: un número o una ruta/URL."""
     spec = spec.strip()
     return int(spec) if spec.isdigit() else spec
 
 
 class CameraSource:
-    """Cámara real leída con OpenCV. Si la cámara deja de responder, se vuelve a abrir."""
 
     def __init__(self, spec: str) -> None:
         import cv2  # solo hace falta con cámara real

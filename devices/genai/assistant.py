@@ -1,9 +1,4 @@
-"""Lógica del asistente de la flota.
-
-Un modelo de lenguaje pequeño no conoce el estado de la flota, así que antes de cada pregunta
-se le entrega un resumen con los datos reales obtenidos de la API (técnica conocida como
-"generación aumentada con contexto"). Las instrucciones le piden responder solo con esos datos.
-"""
+"""Lógica del asistente de la flota."""
 
 import json
 import time
@@ -19,7 +14,6 @@ SYSTEM_PROMPT = (
 
 @dataclass
 class Answer:
-    """Respuesta del modelo con sus medidas de rendimiento."""
 
     text: str
     total_ms: float
@@ -28,12 +22,10 @@ class Answer:
 
     @property
     def ms_per_token(self) -> float:
-        """Latencia por token generado: la métrica comparable entre modelos de lenguaje."""
         return self.total_ms / self.tokens if self.tokens else self.total_ms
 
 
 def fleet_context(devices: list[dict], alerts: list[dict]) -> str:
-    """Resume el estado real de la flota en texto compacto para el prompt."""
     lines = ["Dispositivos:"]
     for d in devices:
         model = d.get("current_model") or {}
@@ -64,7 +56,6 @@ def fleet_context(devices: list[dict], alerts: list[dict]) -> str:
 
 
 def build_messages(question: str, context: str) -> list[dict]:
-    """Mensajes en el formato de chat: primero las instrucciones y después el contexto con la pregunta."""
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": f"Contexto actual de la flota:\n{context}\n\nPregunta: {question}"},
@@ -72,7 +63,6 @@ def build_messages(question: str, context: str) -> list[dict]:
 
 
 def parse_completion(body: dict, total_ms: float) -> Answer:
-    """Respuesta del endpoint OpenAI-compatible de llama.cpp, que añade `timings`."""
     text = body["choices"][0]["message"]["content"].strip()
     tokens = int(body.get("usage", {}).get("completion_tokens") or 0)
     timings = body.get("timings") or {}
@@ -81,7 +71,6 @@ def parse_completion(body: dict, total_ms: float) -> Answer:
 
 
 class LlamaClient:
-    """Cliente del servidor llama.cpp, que ofrece la misma interfaz de chat que otros servicios conocidos."""
 
     def __init__(self, base_url: str, max_tokens: int = 160, timeout: float = 120) -> None:
         self.base_url = base_url.rstrip("/")
@@ -89,7 +78,6 @@ class LlamaClient:
         self.timeout = timeout
 
     def ready(self) -> bool:
-        """Indica si el servidor ya ha cargado el modelo."""
         try:
             with urllib.request.urlopen(f"{self.base_url}/health", timeout=3) as r:
                 return r.status == 200
@@ -97,8 +85,6 @@ class LlamaClient:
             return False
 
     def ask(self, messages: list[dict]) -> Answer:
-        """Envía la conversación y mide cuánto tarda la respuesta.
-        cache_prompt reutiliza el cálculo de la parte del texto que no ha cambiado."""
         payload = json.dumps({
             "messages": messages, "max_tokens": self.max_tokens, "temperature": 0.3, "cache_prompt": True,
         }).encode()
@@ -111,7 +97,6 @@ class LlamaClient:
 
 
 class GovernanceClient:
-    """Lee el estado de la flota de la API de gobernanza con una cuenta de solo lectura."""
 
     def __init__(self, base_url: str, username: str, password: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -119,7 +104,6 @@ class GovernanceClient:
         self.token: str | None = None
 
     def _login(self) -> None:
-        """Obtiene un token de sesión de la API."""
         req = urllib.request.Request(
             f"{self.base_url}/api/auth/login",
             data=json.dumps({"username": self.username, "password": self.password}).encode(),
@@ -129,7 +113,6 @@ class GovernanceClient:
             self.token = json.loads(r.read())["access_token"]
 
     def _get(self, path: str):
-        """Petición GET autenticada; si el token ha caducado, inicia sesión otra vez y reintenta."""
         if not self.token:
             self._login()
         for attempt in range(2):
@@ -145,5 +128,4 @@ class GovernanceClient:
         return None
 
     def snapshot(self) -> tuple[list[dict], list[dict]]:
-        """Dispositivos y alertas abiertas en este momento."""
         return self._get("/api/devices") or [], self._get("/api/alerts?status=open") or []

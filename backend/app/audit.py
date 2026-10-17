@@ -1,9 +1,4 @@
-"""Registro de auditoría encadenado.
-
-Cada entrada guarda el resumen SHA-256 de la entrada anterior, igual que los bloques de una
-cadena. Si alguien modifica o borra una entrada antigua, los resúmenes dejan de coincidir y la
-verificación lo detecta. Así se garantiza que el historial de acciones no se ha alterado.
-"""
+"""Registro de auditoría encadenado."""
 
 import hashlib
 import json
@@ -19,7 +14,6 @@ GENESIS = "0" * 64
 
 def _digest(prev_hash: str, ts: str, actor: str, action: str, entity: str, entity_id: str,
             details: dict) -> str:
-    """Calcula el resumen de una entrada a partir de sus datos y del resumen anterior."""
     body = json.dumps(
         [prev_hash, ts, actor, action, entity, entity_id, details], sort_keys=True, default=str
     )
@@ -36,7 +30,6 @@ def _ts(value) -> str:
 
 def record(db: Session, actor: str, action: str, entity: str, entity_id,
            details: dict | None = None) -> AuditEntry:
-    """Añade una entrada a la sesión. El commit lo hace quien llama, junto con el cambio auditado."""
     last = db.query(AuditEntry).order_by(AuditEntry.id.desc()).first()
     prev_hash = last.hash if last else GENESIS
     ts = utcnow().replace(microsecond=0)
@@ -52,11 +45,6 @@ def record(db: Session, actor: str, action: str, entity: str, entity_id,
 
 
 def verify_chain(db: Session) -> tuple[bool, int, int | None]:
-    """Recorre el registro en orden y comprueba cada resumen.
-
-    Devuelve si la cadena es válida, cuántas entradas se revisaron y, si hay un fallo,
-    el identificador de la primera entrada alterada.
-    """
     prev = GENESIS
     count = 0
     for e in db.query(AuditEntry).order_by(AuditEntry.id):

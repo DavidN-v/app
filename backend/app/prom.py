@@ -1,8 +1,4 @@
-"""Métricas expuestas en la ruta /metrics en formato Prometheus.
-
-VictoriaMetrics las consulta periódicamente y las guarda como series temporales, que después
-se visualizan en Grafana. Un Gauge guarda el último valor medido y un Counter solo aumenta.
-"""
+"""Métricas expuestas en la ruta /metrics en formato Prometheus."""
 
 from prometheus_client import Counter, Gauge
 

@@ -1,6 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-/** Convierte un error de la API en un mensaje legible (y la lista de violaciones si las hay). */
 export function describeError(err: unknown): { message: string; violations: string[] } {
   if (err instanceof HttpErrorResponse) {
     const detail = err.error?.detail;

@@ -44,6 +44,8 @@ services:
     devices:
       - ${VISION_CAMERA_DEVICE:-/dev/null}:${VISION_CAMERA_DEVICE:-/dev/null}
     group_add: ["video"]
+    # Permite leer desde el contenedor el vídeo que emite rpicam-vid en la propia placa
+    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["8101:8101"]
 
   llm:

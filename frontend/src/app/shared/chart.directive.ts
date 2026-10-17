@@ -1,15 +1,9 @@
 import { Directive, ElementRef, OnDestroy, afterNextRender, effect, inject, input, output } from '@angular/core';
 import { EChartsCoreOption, echarts } from './echarts';
 
-/**
- * Directiva que convierte un elemento en una gráfica de ECharts.
- * Uso: <div [egChart]="opciones" (legendToggle)="..."></div>
- * La gráfica se redibuja cuando cambian las opciones y se adapta al tamaño del elemento.
- */
 @Directive({ selector: '[egChart]' })
 export class ChartDirective implements OnDestroy {
   readonly egChart = input.required<EChartsCoreOption>();
-  /** Emite el estado de la leyenda cuando el usuario hace clic en una serie: { nombre: visible } */
   readonly legendToggle = output<{ name: string; selected: Record<string, boolean> }>();
 
   private readonly el = inject(ElementRef<HTMLElement>);

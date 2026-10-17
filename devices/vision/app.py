@@ -1,15 +1,4 @@
-"""Raspberry Pi 5 · Visión artificial.
-
-- Ejecuta YOLOv8n con ONNX Runtime sobre una cámara real (VISION_CAMERA) o, si no se indica,
-  sobre fotografías reales del conjunto COCO que simulan una cámara.
-- Publica telemetría, latencia y confianza reales en la plataforma vía el agente edge.
-- Sirve su pantalla local en http://<host>:8101 con el vídeo anotado.
-- Con las fotografías hay un incidente programado: la "lente se ensucia" (desenfoque y poca luz)
-  y la confianza del modelo baja de verdad, lo que la plataforma detecta como drift.
-- Cuando la plataforma despliega un modelo ONNX nuevo, se carga sin reiniciar el dispositivo.
-- La misma aplicación sirve para otros equipos con Linux (por ejemplo, el Arduino Uno Q)
-  cambiando EDGE_DEVICE_ID, VISION_MODEL_NAME y VISION_MODEL_VERSION.
-"""
+"""Raspberry Pi 5 · Visión artificial."""
 
 import io
 import json
@@ -33,16 +22,15 @@ log = logging.getLogger("vision")
 
 DEVICE_ID = os.getenv("EDGE_DEVICE_ID", "rpi5-vision")
 MODEL_PATH = os.getenv("VISION_MODEL", "/models/yolov8n.onnx")
-# Nombre y versión con los que el modelo figura en el registro de la plataforma
 MODEL_NAME = os.getenv("VISION_MODEL_NAME", "yolo")
 MODEL_VERSION = os.getenv("VISION_MODEL_VERSION", "8.1")
 # Cámara real (número, /dev/videoN o URL de vídeo). Vacío = fotografías de prueba
 CAMERA = os.getenv("VISION_CAMERA", "")
 SCENES_DIR = Path(os.getenv("VISION_SCENES", "/scenes"))
-TARGET_FPS = float(os.getenv("VISION_FPS", "4"))
+TARGET_FPS = float(os.getenv("VISION_FPS", "2"))
 SCENE_SECONDS = float(os.getenv("VISION_SCENE_SECONDS", "6"))
 # Cada DIRTY_EVERY segundos, la lente se ensucia durante DIRTY_FOR segundos (0 = nunca)
-DIRTY_EVERY = float(os.getenv("VISION_DIRTY_EVERY", "300"))
+DIRTY_EVERY = float(os.getenv("VISION_DIRTY_EVERY", "600"))
 DIRTY_FOR = float(os.getenv("VISION_DIRTY_FOR", "60"))
 PORT = int(os.getenv("VISION_PORT", "8101"))
 
@@ -50,7 +38,6 @@ PALETTE = ["#38bdf8", "#4af626", "#facc15", "#f472b6", "#c084fc", "#fb923c", "#3
 
 
 class ActiveModel:
-    """Modelo en uso. Se puede sustituir mientras el bucle de inferencia sigue funcionando."""
 
     def __init__(self, detector: Detector, name: str, version: str) -> None:
         self.lock = threading.Lock()
@@ -61,7 +48,6 @@ class ActiveModel:
             return self.detector, self.name, self.version
 
     def load(self, command: dict, path: Path) -> None:
-        """Carga el modelo recién instalado por un despliegue. Lo usa el agente edge como loader."""
         if command.get("framework", "onnx") != "onnx":
             raise ValueError(f"este dispositivo solo ejecuta modelos ONNX, no {command.get('framework')}")
         detector = Detector(str(path))  # si el archivo no es un modelo válido, falla aquí
@@ -71,7 +57,6 @@ class ActiveModel:
 
 
 class Screen:
-    """Estado compartido entre el bucle de inferencia y la pantalla web."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -99,7 +84,6 @@ def load_font(size: int) -> ImageFont.ImageFont:
 
 
 def annotate(frame: Image.Image, detections: list[Detection], font: ImageFont.ImageFont) -> Image.Image:
-    """Dibuja sobre el fotograma una caja y una etiqueta por cada objeto detectado."""
     img = frame.convert("RGB")
     draw = ImageDraw.Draw(img)
     stroke = max(2, img.width // 300)
@@ -116,8 +100,6 @@ def annotate(frame: Image.Image, detections: list[Detection], font: ImageFont.Im
 
 
 def inference_loop(agent: EdgeAgent, model: ActiveModel, source, screen: Screen) -> None:
-    """Bucle principal: toma un fotograma, lo analiza, informa a la plataforma y actualiza la pantalla,
-    manteniendo el ritmo de TARGET_FPS fotogramas por segundo."""
     font = load_font(max(14, source.width // 40))
     frames, fps, fps_since = 0, 0.0, time.time()
     period = 1 / TARGET_FPS
@@ -192,7 +174,6 @@ def make_handler(screen: Screen):
 
 
 def main() -> None:
-    """Carga el modelo y las escenas, conecta con MQTT y arranca la pantalla web."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if CAMERA:
         source = CameraSource(CAMERA)

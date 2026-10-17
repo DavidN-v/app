@@ -1,9 +1,4 @@
-"""Actualización del esquema en instalaciones que ya tienen datos.
-
-SQLAlchemy crea las tablas que no existen, pero no añade columnas nuevas a tablas existentes.
-Como el proyecto solo ha añadido alguna columna suelta, basta con comprobarlas al arrancar.
-Si el esquema creciera mucho, lo adecuado sería usar una herramienta de migraciones como Alembic.
-"""
+"""Actualización del esquema en instalaciones que ya tienen datos."""
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
@@ -15,7 +10,6 @@ ADDED_COLUMNS = {
 
 
 def ensure_columns(engine: Engine) -> list[str]:
-    """Añade las columnas que falten y devuelve cuáles se han creado."""
     added = []
     insp = inspect(engine)
     with engine.begin() as conn:

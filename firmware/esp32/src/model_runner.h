@@ -1,5 +1,4 @@
-// Ejecución del modelo de confort ambiental con TensorFlow Lite Micro, la versión de
-// TensorFlow pensada para microcontroladores. El modelo va incluido dentro del firmware.
+// Modelo de confort ambiental con TensorFlow Lite Micro.
 // El modelo se incluye como array C generado con:
 //   xxd -i env_regressor.tflite > src/model_data.h
 #pragma once

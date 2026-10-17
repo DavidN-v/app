@@ -105,7 +105,7 @@ services:
       EDGE_BOARD_RAM_MB: "4096"
       EDGE_MQTT_HOST: mosquitto
       VISION_FPS: ${VISION_FPS:-2}
-      VISION_DIRTY_EVERY: ${VISION_DIRTY_EVERY:-300}
+      VISION_DIRTY_EVERY: ${VISION_DIRTY_EVERY:-600}
     volumes: [vision-models:/data/models]
     depends_on: [mosquitto, api]
     ports: ["8101:8101"]

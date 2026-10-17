@@ -8,7 +8,6 @@ from app.seed import _YOLO_REF_HIST
 
 
 def reference_confidence(rng):
-    """Una confianza con la distribución de referencia medida para yolo 8.1."""
     i = rng.choices(range(10), weights=_YOLO_REF_HIST)[0]
     return rng.uniform(i / 10, (i + 1) / 10 - 1e-6)
 
@@ -109,7 +108,6 @@ def test_overview_aggregates(client, auth, mqtt):
     assert data["latency_series"]["rpi5-vision"][0][1] == 28
 
 
-# --- Drift ---------------------------------------------------------------
 
 def test_psi_identical_is_zero():
     dist = [0.1] * 10

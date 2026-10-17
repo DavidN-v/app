@@ -4,13 +4,6 @@ import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../shared/toast.service';
 import { AuthService } from './auth.service';
 
-/**
- * Intercepta todas las peticiones HTTP de la consola.
- *
- * - Añade el token de sesión a las peticiones dirigidas a la API.
- * - Si la API responde 401 (sesión no válida o caducada), cierra la sesión.
- * - Si la API no responde o falla, muestra un aviso general.
- */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const toast = inject(ToastService);

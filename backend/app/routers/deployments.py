@@ -15,14 +15,11 @@ router = APIRouter(prefix="/api/deployments", tags=["deployments"])
 @router.get("", response_model=list[DeploymentOut])
 def list_deployments(limit: int = 100, db: Session = Depends(get_db),
                      _: User = Depends(current_user)):
-    """Últimos despliegues, del más reciente al más antiguo."""
     return db.query(Deployment).order_by(Deployment.id.desc()).limit(min(limit, 500)).all()
 
 
 @router.post("/check")
 def check(body: DeploymentIn, db: Session = Depends(get_db), _: User = Depends(current_user)):
-    """Simulación previa: indica qué políticas bloquearían el despliegue, sin llegar a hacerlo.
-    La consola la usa para avisar al usuario antes de que confirme."""
     model, device = _load(db, body)
     violations = policies.deployment_violations(policies.load(db), model, device)
     return {"allowed": not violations, "violations": violations}
@@ -31,13 +28,6 @@ def check(body: DeploymentIn, db: Session = Depends(get_db), _: User = Depends(c
 @router.post("", response_model=DeploymentOut, status_code=status.HTTP_202_ACCEPTED)
 def create_deployment(body: DeploymentIn, request: Request, db: Session = Depends(get_db),
                       user: User = Depends(require_role("operator"))):
-    """Solicita un despliegue.
-
-    Pasos: comprobar las políticas (si alguna falla, el intento bloqueado se registra en la
-    auditoría), evitar dos instalaciones simultáneas en el mismo dispositivo, guardar la
-    solicitud y enviar la orden por MQTT. Se responde 202 (aceptado) porque la instalación
-    termina más tarde, cuando el dispositivo confirma el resultado.
-    """
     model, device = _load(db, body)
     violations = policies.deployment_violations(policies.load(db), model, device)
     if violations:
@@ -69,7 +59,6 @@ def create_deployment(body: DeploymentIn, request: Request, db: Session = Depend
 
 
 def _load(db: Session, body: DeploymentIn) -> tuple[MLModel, Device]:
-    """Busca el modelo y el dispositivo de la solicitud; responde 404 si alguno no existe."""
     model = db.get(MLModel, body.model_id)
     device = db.get(Device, body.device_id)
     if model is None or device is None:
