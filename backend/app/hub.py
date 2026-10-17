@@ -46,6 +46,12 @@ class LiveHub:
             b[1] += 1
             b[2] = max(b[2], value)
 
+    def recent_latency(self, device_id: str, n: int = 10) -> float | None:
+        """Media de las últimas `n` inferencias: una muestra aislada no es una tendencia."""
+        with self._lock:
+            values = [v for _, v in list(self.latency.get(device_id, ()))[-n:]]
+        return sum(values) / len(values) if values else None
+
     def drain_buckets(self, before: float) -> list[tuple[str, int, float, float, int]]:
         """Entrega los minutos ya cerrados (anteriores a `before`) para guardarlos."""
         with self._lock:

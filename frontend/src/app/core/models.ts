@@ -128,5 +128,6 @@ export type LiveEvent =
   | { type: 'inference'; data: { id: string; latency_ms: number; confidence: number | null; model: string } }
   | { type: 'device_status'; data: { id: string; status: 'online' | 'offline' } }
   | { type: 'alert'; data: Alert }
+  | { type: 'alert_resolved'; data: { ids: number[]; device_id: string | null; kind: string } }
   | { type: 'deployment'; data: { id: number; status: Deployment['status']; stage?: DeployStage } }
   | { type: 'ping' };

@@ -157,3 +157,57 @@ def test_drift_requires_minimum_samples(mqtt, db):
     mqtt("edge/rpi5-vision/inference",
          {"model": "yolo", "version": "8.1", "latency_ms": 30, "confidence": 0.1})
     assert jobs.check_drift(db) == {}
+
+
+def test_threshold_alert_resolves_when_condition_clears(mqtt, db):
+    mqtt("edge/rpi5-genai/telemetry", {"cpu": 95, "ram": 60, "temp": 50})
+    assert len(open_alerts(db, "high_cpu")) == 1
+    mqtt("edge/rpi5-genai/telemetry", {"cpu": 85, "ram": 60, "temp": 50})  # dentro del margen
+    assert len(open_alerts(db, "high_cpu")) == 1
+    mqtt("edge/rpi5-genai/telemetry", {"cpu": 40, "ram": 60, "temp": 50})
+    assert open_alerts(db, "high_cpu") == []
+    assert db.query(Alert).filter_by(kind="high_cpu").one().handled_by == "system"
+
+
+def test_single_latency_spike_among_fast_inferences_does_not_alert(mqtt, db):
+    for _ in range(9):
+        mqtt("edge/ventuno/inference", {"model": "anomaly-ts", "version": "2.0", "latency_ms": 30})
+    mqtt("edge/ventuno/inference", {"model": "anomaly-ts", "version": "2.0", "latency_ms": 300})
+    assert open_alerts(db, "high_latency") == []
+
+
+def test_latency_alert_resolves_when_average_recovers(mqtt, db):
+    mqtt("edge/ventuno/inference", {"model": "anomaly-ts", "version": "2.0", "latency_ms": 250})
+    assert len(open_alerts(db, "high_latency")) == 1
+    for _ in range(10):
+        mqtt("edge/ventuno/inference", {"model": "anomaly-ts", "version": "2.0", "latency_ms": 20})
+    assert open_alerts(db, "high_latency") == []
+
+
+def test_model_not_in_registry_raises_mismatch_and_clears(mqtt, db):
+    mqtt("edge/rpi5-vision/inference", {"model": "yolo", "version": "9.0", "latency_ms": 30})
+    alerts = open_alerts(db, "model_mismatch")
+    assert len(alerts) == 1 and "yolo:9.0" in alerts[0].message
+    mqtt("edge/rpi5-vision/inference", {"model": "yolo", "version": "8.1", "latency_ms": 30})
+    assert open_alerts(db, "model_mismatch") == []
+
+
+def test_drift_alert_resolves_when_distribution_recovers(mqtt, db):
+    rng = random.Random(7)
+    for _ in range(80):
+        mqtt("edge/rpi5-vision/inference",
+             {"model": "yolo", "version": "8.1", "latency_ms": 30, "confidence": rng.uniform(0.2, 0.5)})
+    jobs.check_drift(db)
+    assert len(open_alerts(db, "drift")) == 1
+    for _ in range(500):  # la ventana se llena de nuevo con la distribución de referencia
+        mqtt("edge/rpi5-vision/inference",
+             {"model": "yolo", "version": "8.1", "latency_ms": 30, "confidence": rng.betavariate(8, 2)})
+    jobs.check_drift(db)
+    assert open_alerts(db, "drift") == []
+
+
+def test_temperature_alert_resolves_when_sensor_reports_nothing(mqtt, db):
+    mqtt("edge/rpi5-genai/telemetry", {"cpu": 30, "ram": 60, "temp": 89})
+    assert len(open_alerts(db, "high_temperature")) == 1
+    mqtt("edge/rpi5-genai/telemetry", {"cpu": 30, "ram": 60, "temp": None})
+    assert open_alerts(db, "high_temperature") == []

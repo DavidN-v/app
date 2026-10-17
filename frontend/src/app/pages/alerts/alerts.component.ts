@@ -141,7 +141,7 @@ export class AlertsComponent implements OnInit {
     this.load();
     this.live.events$
       .pipe(
-        filter((e) => e.type === 'alert'),
+        filter((e) => e.type === 'alert' || e.type === 'alert_resolved'),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => this.load());

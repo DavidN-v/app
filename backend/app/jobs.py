@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from . import audit, drift, policies, prom
-from .alerting import raise_alert
+from .alerting import raise_alert, resolve_alerts
 from .config import get_settings
 from .db import SessionLocal
 from .hub import hub
@@ -54,6 +54,8 @@ def check_drift(db: Session) -> dict[str, float]:
             raise_alert(db, device.id, "drift", "warning",
                         f"Drift en {model.name} v{model.version} sobre {device.name}: "
                         f"PSI={value:.3f} (> {threshold:g})")
+        else:
+            resolve_alerts(db, device.id, "drift")
     db.commit()
     return results
 

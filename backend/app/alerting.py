@@ -27,3 +27,18 @@ def raise_alert(db: Session, device_id: str | None, kind: str, severity: str, me
                  "created_at": alert.created_at.isoformat()},
     })
     return alert
+
+
+def resolve_alerts(db: Session, device_id: str | None, kind: str) -> int:
+    """Cierra las alertas abiertas de un tipo cuando su condición ha desaparecido."""
+    open_alerts = (
+        db.query(Alert)
+        .filter(Alert.device_id == device_id, Alert.kind == kind, Alert.status != "resolved")
+        .all()
+    )
+    for alert in open_alerts:
+        alert.status, alert.handled_by = "resolved", "system"
+    if open_alerts:
+        hub.broadcast({"type": "alert_resolved", "data": {
+            "ids": [a.id for a in open_alerts], "device_id": device_id, "kind": kind}})
+    return len(open_alerts)

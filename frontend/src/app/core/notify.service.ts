@@ -69,7 +69,7 @@ export class NotifyService {
         if (!ok) this.systemNotify('Despliegue fallido', msg);
       }),
       // Contador de alertas abiertas: al arrancar, cada minuto y cuando cambian
-      merge(timer(0, 60_000), events.pipe(filter((e) => e.type === 'alert'), debounceTime(400)))
+      merge(timer(0, 60_000), events.pipe(filter((e) => e.type === 'alert' || e.type === 'alert_resolved'), debounceTime(400)))
         .pipe(switchMap(() => this.api.alerts()), takeUntilDestroyed(destroyRef))
         .subscribe((alerts) => {
           this.openAlerts.set(alerts.filter((a) => a.status !== 'resolved').length);

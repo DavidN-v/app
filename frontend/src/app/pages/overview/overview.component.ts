@@ -289,7 +289,7 @@ export class OverviewComponent implements OnInit {
   ngOnInit(): void {
     // Se refresca cada 15 s y también (agrupado) cuando llega una alerta o un despliegue
     const changes$ = this.live.events$.pipe(
-      filter((e) => e.type === 'alert' || e.type === 'deployment'),
+      filter((e) => e.type === 'alert' || e.type === 'alert_resolved' || e.type === 'deployment'),
       debounceTime(500),
     );
     merge(timer(0, REFRESH_MS), changes$)

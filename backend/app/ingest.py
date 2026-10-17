@@ -14,11 +14,24 @@ import logging
 from sqlalchemy.orm import Session
 
 from . import audit, policies, prom
-from .alerting import raise_alert
+from .alerting import raise_alert, resolve_alerts
 from .hub import hub
-from .models import Alert, Deployment, Device, utcnow
+from .models import Deployment, Device, utcnow
 
 log = logging.getLogger(__name__)
+
+# Una alerta de umbral se cierra sola cuando el valor baja del 90 % del límite.
+# El margen evita que una métrica que ronda el límite abra y cierre alertas sin parar.
+HYSTERESIS = 0.9
+LATENCY_WINDOW = 10
+
+
+def _threshold(db: Session, device: Device, kind: str, value: float, limit: float,
+               severity: str, message: str) -> None:
+    if value > limit:
+        raise_alert(db, device.id, kind, severity, message)
+    elif value <= limit * HYSTERESIS:
+        resolve_alerts(db, device.id, kind)
 
 
 def handle(db: Session, topic: str, payload: bytes, retained: bool = False) -> None:
@@ -63,9 +76,7 @@ def _mark_online(db: Session, device: Device) -> None:
     if was_offline:
         hub.broadcast({"type": "device_status", "data": {"id": device.id, "status": "online"}})
         # La condición desapareció: se cierran solas las alertas de desconexión
-        db.query(Alert).filter(
-            Alert.device_id == device.id, Alert.kind == "offline", Alert.status != "resolved"
-        ).update({"status": "resolved", "handled_by": "system"})
+        resolve_alerts(db, device.id, "offline")
 
 
 def _on_status(db: Session, device: Device, status: str, retained: bool = False) -> None:
@@ -92,18 +103,18 @@ def _on_telemetry(db: Session, device: Device, data: dict) -> None:
 
     rules = policies.load(db)
     max_temp = rules.number("max_temp_c", 75)
-    if device.temp is not None and device.temp > max_temp:
-        raise_alert(db, device.id, "high_temperature", "critical",
-                    f"Temperatura alta en {device.name}: {device.temp:.1f} °C (> {max_temp:g})")
+    if device.temp is not None:
+        _threshold(db, device, "high_temperature", device.temp, max_temp, "critical",
+                   f"Temperatura alta en {device.name}: {device.temp:.1f} °C (> {max_temp:g})")
+    else:
+        # Sin sensor ya no hay lectura que sostenga una alerta de temperatura anterior
+        resolve_alerts(db, device.id, "high_temperature")
     max_cpu = rules.number("max_cpu_pct", 90)
-    if device.cpu > max_cpu:
-        raise_alert(db, device.id, "high_cpu", "warning",
-                    f"CPU alta en {device.name}: {device.cpu:.0f}% (> {max_cpu:g}%)")
-
+    _threshold(db, device, "high_cpu", device.cpu, max_cpu, "warning",
+               f"CPU alta en {device.name}: {device.cpu:.0f}% (> {max_cpu:g}%)")
     max_ram = rules.number("max_ram_pct", 85)
-    if device.ram > max_ram:
-        raise_alert(db, device.id, "high_ram", "warning",
-                    f"RAM alta en {device.name}: {device.ram:.0f}% (> {max_ram:g}%)")
+    _threshold(db, device, "high_ram", device.ram, max_ram, "warning",
+               f"RAM alta en {device.name}: {device.ram:.0f}% (> {max_ram:g}%)")
 
     hub.broadcast({"type": "telemetry", "data": {
         "id": device.id, "cpu": device.cpu, "ram": device.ram, "temp": device.temp,
@@ -123,13 +134,29 @@ def _on_inference(db: Session, device: Device, data: dict) -> None:
         hub.record_confidence(device.id, float(conf), data.get("model"))
 
     max_latency = policies.load(db).number("max_latency_ms", 100)
-    if latency > max_latency:
-        raise_alert(db, device.id, "high_latency", "warning",
-                    f"Latencia elevada en {device.name}: {latency:.0f} ms (> {max_latency:g})")
+    avg = hub.recent_latency(device.id, LATENCY_WINDOW)
+    _threshold(db, device, "high_latency", avg, max_latency, "warning",
+               f"Latencia elevada en {device.name}: media {avg:.0f} ms en las últimas "
+               f"{LATENCY_WINDOW} inferencias (> {max_latency:g})")
+    _check_model(db, device, data)
 
     hub.broadcast({"type": "inference", "data": {
         "id": device.id, "latency_ms": latency, "confidence": conf, "model": model_label,
     }})
+
+
+def _check_model(db: Session, device: Device, data: dict) -> None:
+    """Gobernanza: el modelo que ejecuta la placa debe ser el que dice el registro."""
+    reported, version = data.get("model"), data.get("version")
+    current = device.current_model
+    if not reported or current is None:
+        return
+    if reported != current.name or (version is not None and str(version) != current.version):
+        raise_alert(db, device.id, "model_mismatch", "critical",
+                    f"{device.name} ejecuta {reported}:{version or '?'}, pero el registro indica "
+                    f"{current.name}:{current.version}")
+    else:
+        resolve_alerts(db, device.id, "model_mismatch")
 
 
 PROGRESS_STAGES = ("downloading", "verifying", "installing")
@@ -159,6 +186,8 @@ def _on_deploy_ack(db: Session, device: Device, data: dict) -> None:
         device.current_model_id = dep.model_id
         if dep.model.status == "approved":
             dep.model.status = "deployed"
+        # El drift medido era del modelo anterior
+        resolve_alerts(db, device.id, "drift")
     else:
         dep.status = "failed"
         dep.stage = "failed"

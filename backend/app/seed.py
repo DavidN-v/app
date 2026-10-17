@@ -27,8 +27,8 @@ DEMO_MODELS = [
     # name, version, framework, task, license, device, metrics
     ("yolo", "8.1", "onnx", "detección de objetos", "agpl-3.0", "rpi5-vision",
      {"mAP50": 0.87, "reference_confidence_hist": _REF_HIST}),
-    ("llama3-mini", "3.2-q4", "gguf", "asistente industrial", "llama3", "rpi5-genai",
-     {"tokens_per_s": 9.1}),
+    ("qwen2.5-0.5b", "q4_k_m", "gguf", "asistente industrial", "apache-2.0", "rpi5-genai",
+     {"tokens_per_s": 22.0}),
     ("telemetry-agent", "1.4", "onnx", "clasificación de eventos", "apache-2.0", "rpi5-agent",
      {"f1": 0.91}),
     ("yolo-nano", "8.1-int8", "onnx", "detección de objetos", "agpl-3.0", "uno-q",

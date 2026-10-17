@@ -86,6 +86,11 @@ export class LiveService implements OnDestroy {
       case 'alert':
         this.alertFeed.update((feed) => [event.data, ...feed].slice(0, MAX_FEED));
         break;
+      case 'alert_resolved': {
+        const ids = new Set(event.data.ids);
+        this.alertFeed.update((feed) => feed.map((a) => (ids.has(a.id) ? { ...a, status: 'resolved' } : a)));
+        break;
+      }
     }
     this.events$.next(event);
   }
