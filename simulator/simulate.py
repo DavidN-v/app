@@ -10,6 +10,7 @@ cuando (temperatura, latencia, drift) y responde a las órdenes de despliegue.
 import argparse
 import json
 import math
+import os
 import random
 import threading
 import time
@@ -44,8 +45,10 @@ PROFILES = [
 
 
 class Simulator:
-    def __init__(self, host: str, port: int, rate: float, incidents: bool) -> None:
+    def __init__(self, host: str, port: int, rate: float, incidents: bool, skip: set[str] | None = None) -> None:
         self.host, self.port, self.rate, self.incidents = host, port, rate, incidents
+        # Los dispositivos que ya corren de verdad (perfil "real") no se simulan
+        self.profiles = [p for p in PROFILES if p.device_id not in (skip or set())]
         self.clients: dict[str, mqtt.Client] = {}
         self.t0 = time.time()
 
@@ -117,13 +120,15 @@ class Simulator:
         c.publish(f"edge/{p.device_id}/inference", json.dumps(inference))
 
     def run(self) -> None:
-        for p in PROFILES:
+        for p in self.profiles:
             self.clients[p.device_id] = self.connect(p)
-        print(f"Simulando {len(PROFILES)} dispositivos contra {self.host}:{self.port}")
+        skipped = sorted({p.device_id for p in PROFILES} - {p.device_id for p in self.profiles})
+        print(f"Simulando {len(self.profiles)} dispositivos contra {self.host}:{self.port}"
+              + (f" (reales, no se simulan: {', '.join(skipped)})" if skipped else ""))
         try:
             while True:
                 t = time.time() - self.t0
-                for p in PROFILES:
+                for p in self.profiles:
                     self.tick(p, t)
                 time.sleep(1 / self.rate)
         except KeyboardInterrupt:
@@ -141,5 +146,8 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=1883)
     ap.add_argument("--rate", type=float, default=1.0, help="mensajes por segundo por dispositivo")
     ap.add_argument("--no-incidents", action="store_true")
+    ap.add_argument("--skip", default=os.getenv("SIM_SKIP", ""),
+                    help="dispositivos que no se simulan porque corren de verdad (separados por comas)")
     args = ap.parse_args()
-    Simulator(args.host, args.port, args.rate, not args.no_incidents).run()
+    skip = {s.strip() for s in args.skip.split(",") if s.strip()}
+    Simulator(args.host, args.port, args.rate, not args.no_incidents, skip).run()

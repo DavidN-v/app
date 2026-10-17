@@ -63,6 +63,24 @@ Usuarios de demostración (contraseña `<usuario>123`):
 | `approver` | approver | aprobar/retirar modelos, ver y verificar auditoría |
 | `admin` | admin | todo + políticas y alta/baja de dispositivos |
 
+## Dispositivos reales en contenedor (perfil `real`)
+
+Además del simulador, `devices/` contiene dispositivos que ejecutan **software real**: el mismo
+código que correría en la placa, con el hardware sustituido por un contenedor.
+
+| Dispositivo | Qué ejecuta de verdad | Pantalla local |
+|---|---|---|
+| `rpi5-vision` | YOLOv8n en ONNX Runtime sobre escenas reales de COCO; latencia, confianza y drift reales | http://localhost:8101 |
+
+```bash
+# Toda la plataforma + simulador para el resto de placas + la placa de visión real
+SIM_SKIP=rpi5-vision docker compose --profile demo --profile real up -d --build
+```
+
+`SIM_SKIP` evita que el simulador imite a una placa que ya corre de verdad. Cada 5 minutos la
+"lente se ensucia" durante un minuto (desenfoque y poca luz): la confianza del modelo cae de verdad
+y la plataforma lo detecta como drift. Se ajusta con `VISION_DIRTY_EVERY` (0 = nunca).
+
 ## Desarrollo local (sin Docker)
 
 ```bash

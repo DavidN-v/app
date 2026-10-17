@@ -167,12 +167,8 @@ export class OverviewComponent implements OnInit {
     return { deployed: s.deployed ?? 0, approved: s.approved ?? 0, draft: s.draft ?? 0, retired: s.retired ?? 0 };
   });
 
-  protected readonly alerts = computed(() => {
-    const seen = new Set<number>();
-    return [...this.live.alertFeed(), ...this.recentAlerts()]
-      .filter((a) => !seen.has(a.id) && seen.add(a.id))
-      .slice(0, 4);
-  });
+  /** Solo alertas abiertas: las que el sistema ya resolvió (p. ej. una unidad que volvió) no se muestran. */
+  protected readonly alerts = computed(() => this.recentAlerts().filter((a) => a.status !== 'resolved').slice(0, 4));
 
   private readonly names = computed(() =>
     Object.fromEntries(this.baseDevices().map((d) => [d.id, d.id.toUpperCase()])),
@@ -301,7 +297,10 @@ export class OverviewComponent implements OnInit {
         switchMap(() => this.api.overview()),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((o) => this.overview.set(o));
+      .subscribe((o) => {
+        this.overview.set(o);
+        this.api.alerts().subscribe((a) => this.recentAlerts.set(a));
+      });
     timer(0, REFRESH_MS)
       .pipe(
         switchMap(() => this.api.devices()),
@@ -311,7 +310,6 @@ export class OverviewComponent implements OnInit {
         this.baseDevices.set(d);
         this.loaded.set(true);
       });
-    this.api.alerts().subscribe((a) => this.recentAlerts.set(a));
 
     // Historial de la gráfica: al entrar (sobrevive a recargas) y cada minuto en 1 h / 24 h
     this.loadHistory();

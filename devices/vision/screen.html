@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RPI5-VISION · Pantalla local</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#15181d; --cell:#1c2027; --line:#313844; --text:#f2f4f7; --muted:#a9b1bd; --dim:#788292;
+          --unit:#38bdf8; --green:#4af626; --red:#ff2a2a; --yellow:#facc15; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.45 'JetBrains Mono', Consolas, monospace; }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.1) 2px 3px); }
+  .screen { display: grid; grid-template-rows: auto 1fr auto; height: 100%; border-top: 3px solid var(--unit); }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; font: 900 24px/1 Archivo, 'Arial Black', sans-serif; letter-spacing: -.04em; text-transform: uppercase; }
+  .unit { color: var(--unit); font-size: 11px; letter-spacing: .14em; font-weight: 700; }
+  .live { color: var(--green); letter-spacing: .1em; text-transform: uppercase; font-size: 12px; }
+  .live i { display: inline-block; width: 8px; height: 8px; background: var(--green); margin-right: 8px; animation: blink 1.2s steps(2) infinite; }
+  .live.dirty { color: var(--yellow); } .live.dirty i { background: var(--yellow); }
+  @keyframes blink { 50% { opacity: .15; } }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 280px; min-height: 0; }
+  .view { position: relative; display: grid; place-items: center; background: #000; min-height: 0; overflow: hidden; }
+  .view img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  aside { border-left: 1px solid var(--line); background: var(--cell); padding: 14px 16px; overflow: auto; }
+  h2 { margin: 0 0 10px; font-size: 11px; font-weight: 500; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  ol { list-style: none; margin: 0 0 18px; padding: 0; }
+  li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  li b { font-weight: 500; } li span { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 48px; }
+  .spark i { flex: 1; background: var(--unit); opacity: .8; min-height: 2px; }
+  footer { display: flex; gap: 0; border-top: 1px solid var(--line); }
+  footer div { flex: 1; padding: 10px 18px; border-right: 1px solid var(--line); }
+  footer div:last-child { border-right: 0; }
+  footer small { display: block; color: var(--dim); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+  footer b { font: 900 22px/1.1 Archivo, sans-serif; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  footer .model b { font: 500 13px/1.6 'JetBrains Mono', monospace; letter-spacing: 0; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } aside { display: none; } footer { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+<div class="screen">
+  <header>
+    <div><div class="unit">UNIT / 01 · RPI5-VISION</div><h1>Raspberry Pi 5 · Visión artificial</h1></div>
+    <div class="live" id="live"><i></i><span id="lens">Cámara activa</span></div>
+  </header>
+  <main>
+    <div class="view"><img src="/stream.mjpg" alt="Vídeo de la cámara con los objetos detectados"></div>
+    <aside>
+      <h2>[ Detecciones ]</h2>
+      <ol id="dets"><li><b>Esperando…</b></li></ol>
+      <h2>[ Latencia · últimas 60 ]</h2>
+      <div class="spark" id="spark"></div>
+    </aside>
+  </main>
+  <footer>
+    <div><small>Objetos</small><b id="objects">—</b></div>
+    <div><small>FPS</small><b id="fps">—</b></div>
+    <div><small>Latencia</small><b id="lat">—</b></div>
+    <div class="model"><small>Modelo</small><b id="model">—</b></div>
+  </footer>
+</div>
+<script>
+  async function tick() {
+    try {
+      const s = await (await fetch('/stats', { cache: 'no-store' })).json();
+      document.getElementById('objects').textContent = String(s.objects ?? '—').padStart(2, '0');
+      document.getElementById('fps').textContent = s.fps ?? '—';
+      document.getElementById('lat').textContent = s.latency_ms != null ? s.latency_ms.toFixed(0) + ' ms' : '—';
+      document.getElementById('model').textContent = s.model ?? '—';
+      const dirty = s.lens === 'sucia';
+      document.getElementById('live').classList.toggle('dirty', dirty);
+      document.getElementById('lens').textContent = dirty ? 'Lente sucia · confianza baja' : 'Cámara activa';
+      document.getElementById('dets').innerHTML = (s.detections || []).length
+        ? s.detections.map(d => `<li><b>${d.label}</b><span>${d.score.toFixed(2)}</span></li>`).join('')
+        : '<li><b>Sin objetos</b></li>';
+      const h = s.history || [], max = Math.max(...h, 1);
+      document.getElementById('spark').innerHTML = h.map(v => `<i style="height:${Math.max(4, v / max * 100)}%"></i>`).join('');
+    } catch { /* el dispositivo se está reiniciando */ }
+  }
+  tick(); setInterval(tick, 700);
+</script>
+</body>
+</html>

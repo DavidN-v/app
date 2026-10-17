@@ -76,10 +76,30 @@ services:
     profiles: ["demo"]
     build: ./simulator
     command: ["--host", "mosquitto"]
+    environment:
+      # Con el perfil "real": SIM_SKIP=rpi5-vision para no tener dos rpi5-vision
+      SIM_SKIP: ${SIM_SKIP:-}
     depends_on: [mosquitto, api]
+
+  # Dispositivos reales en contenedor: docker compose --profile real up -d
+  rpi5-vision:
+    profiles: ["real"]
+    build:
+      context: .
+      dockerfile: devices/vision/Dockerfile
+    image: edge-governance-rpi5-vision
+    environment:
+      EDGE_DEVICE_ID: rpi5-vision
+      EDGE_MQTT_HOST: mosquitto
+      VISION_FPS: ${VISION_FPS:-4}
+      VISION_DIRTY_EVERY: ${VISION_DIRTY_EVERY:-300}
+    volumes: [vision-models:/data/models]
+    depends_on: [mosquitto, api]
+    ports: ["8101:8101"]
 
 volumes:
   mosquitto-data:
   postgres-data:
   vm-data:
   grafana-data:
+  vision-models:
