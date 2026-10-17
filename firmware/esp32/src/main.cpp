@@ -16,6 +16,10 @@
 
 #include "model_runner.h"
 
+#ifndef WIFI_CHANNEL
+#define WIFI_CHANNEL 0  // 0 = escanear todos los canales
+#endif
+
 static const char *MODEL_NAME = "env-regressor";
 static const char *MODEL_VERSION = "1.1";
 static const uint32_t TELEMETRY_MS = 5000;
@@ -75,11 +79,11 @@ void onMessage(char *t, byte *payload, unsigned int len) {
 
 void connectWifi() {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.begin(WIFI_SSID, WIFI_PASS, WIFI_CHANNEL);
   Serial.printf("WiFi: conectando a %s", WIFI_SSID);
   drawScreen("WIFI...");
   while (WiFi.status() != WL_CONNECTED) { delay(250); Serial.print("."); }
-  Serial.printf(" ok, IP %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf(" ok, IP %s\r\n", WiFi.localIP().toString().c_str());
 }
 
 void connectMqtt() {
@@ -87,14 +91,14 @@ void connectMqtt() {
   mqtt.setCallback(onMessage);
   drawScreen("MQTT...");
   while (!mqtt.connected()) {
-    Serial.printf("MQTT: conectando a %s:1883\n", MQTT_HOST);
+    Serial.printf("MQTT: conectando a %s:1883\r\n", MQTT_HOST);
     String id = String("fw-") + DEVICE_ID;
     if (mqtt.connect(id.c_str(), nullptr, nullptr, topic("status").c_str(), 1, true, "offline")) {
       mqtt.publish(topic("status").c_str(), "online", true);
       mqtt.subscribe(topic("deploy").c_str(), 1);
       Serial.println("MQTT: conectado, estado online publicado");
     } else {
-      Serial.printf("MQTT: fallo (rc=%d), reintento en 2 s\n", mqtt.state());
+      Serial.printf("MQTT: fallo (rc=%d), reintento en 2 s\r\n", mqtt.state());
       delay(2000);
     }
   }
@@ -106,7 +110,10 @@ void publishTelemetry() {
   size_t free_ = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
   doc["ram"] = 100.0 * (total - free_) / total;
   doc["cpu"] = runner.lastDutyCyclePct();
-  doc["temp"] = temperatureRead();  // sensor interno del SoC
+  // Sensor interno del SoC; Wokwi no lo simula y devuelve un valor sin sentido
+  float temp = temperatureRead();
+  if (temp > -10 && temp < 125) doc["temp"] = temp;
+  else doc["temp"] = nullptr;
   publishJson("telemetry", doc);
 }
 
@@ -125,7 +132,7 @@ void publishInference() {
 
   lastT = features[0]; lastH = features[1]; lastCo2 = features[2];
   lastComfort = prediction; lastLatency = latency_ms; inferences++;
-  Serial.printf("Inferencia #%lu: %.1f C, %.0f %%, %.0f ppm -> confort %.1f (%.2f ms)\n",
+  Serial.printf("Inferencia #%lu: %.1f C, %.0f %%, %.0f ppm -> confort %.1f (%.2f ms)\r\n",
                 (unsigned long)inferences, lastT, lastH, lastCo2, prediction, latency_ms);
   drawScreen("ONLINE");
 }
