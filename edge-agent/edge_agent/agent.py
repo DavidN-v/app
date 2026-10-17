@@ -22,10 +22,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
-
-from . import system
-from .deployer import ModelStore
+from . import connection, system
+from .deployer import InstallResult, ModelStore
 
 log = logging.getLogger("edge_agent")
 
@@ -40,8 +38,13 @@ class InferenceTrace:
 class EdgeAgent:
     """Lógica del agente, separada de la conexión MQTT para poder probarla con un cliente falso."""
 
-    def __init__(self, device_id: str, client, store: ModelStore, interval_s: float = 5.0) -> None:
+    def __init__(self, device_id: str, client, store: ModelStore, interval_s: float = 5.0,
+                 loader=None) -> None:
+        """loader es una función opcional loader(orden, ruta) que pone en marcha el modelo recién
+        instalado. Si lanza una excepción, la instalación se deshace y se informa del fallo.
+        Sin loader, el modelo solo se deja en disco para que lo use el programa del dispositivo."""
         self.device_id = device_id
+        self.loader = loader
         self.client = client
         self.store = store
         self.interval_s = interval_s
@@ -86,6 +89,12 @@ class EdgeAgent:
             self.publish("deploy/progress", {"deployment_id": deployment_id, "stage": stage}, qos=1)
 
         result = self.store.install(command, progress=progress)
+        if result.ok and self.loader is not None:
+            try:
+                self.loader(command, result.path)
+            except Exception as exc:  # cualquier fallo al cargar deja el modelo anterior en marcha
+                self.store.revert()
+                result = InstallResult(False, f"Descargado y verificado, pero no se pudo cargar: {exc}")
         ack = {"deployment_id": deployment_id,
                "status": "succeeded" if result.ok else "failed",
                "message": result.message}
@@ -121,24 +130,14 @@ def main() -> None:
     """Arranque del agente. Toda la configuración llega por variables de entorno EDGE_*."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     device_id = os.environ["EDGE_DEVICE_ID"]
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"agent-{device_id}")
-    if user := os.getenv("EDGE_MQTT_USERNAME"):
-        client.username_pw_set(user, os.getenv("EDGE_MQTT_PASSWORD"))
-    if os.getenv("EDGE_MQTT_TLS") == "1":
-        client.tls_set(ca_certs=os.getenv("EDGE_MQTT_CA"), certfile=os.getenv("EDGE_MQTT_CERT"),
-                       keyfile=os.getenv("EDGE_MQTT_KEY"))
-    # Último mensaje: si el agente se cae sin despedirse, el broker publica "offline" en su nombre
-    client.will_set(f"edge/{device_id}/status", "offline", qos=1, retain=True)
+    client = connection.create_client(device_id, client_id=f"agent-{device_id}")
 
     agent = EdgeAgent(device_id, client,
                       ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "./models"))),
                       float(os.getenv("EDGE_INTERVAL_S", "5")))
     client.on_connect = agent.on_connect
     client.on_message = agent.on_message
-    client.reconnect_delay_set(1, 30)
-    client.connect_async(os.getenv("EDGE_MQTT_HOST", "localhost"),
-                         int(os.getenv("EDGE_MQTT_PORT", "1883")), keepalive=30)
-    client.loop_start()
+    connection.connect(client)
     try:
         agent.run()
     except KeyboardInterrupt:

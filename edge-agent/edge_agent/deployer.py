@@ -99,6 +99,12 @@ class ModelStore:
         self._write_manifest(manifest)
         return InstallResult(True, f"{name} v{version} instalado", target)
 
+    def revert(self) -> None:
+        """Anula la última instalación: el modelo anterior vuelve a ser el actual."""
+        manifest = self.manifest()
+        manifest["current"], manifest["previous"] = manifest.get("previous"), None
+        self._write_manifest(manifest)
+
     def rollback(self) -> InstallResult:
         """Vuelve al modelo anterior si todavía está en disco."""
         manifest = self.manifest()

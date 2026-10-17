@@ -17,7 +17,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
+from edge_agent import connection
 from edge_agent.agent import EdgeAgent
 from edge_agent.deployer import ModelStore
 
@@ -94,6 +94,13 @@ class Assistant:
 PAGE = (Path(__file__).parent / "screen.html").read_bytes()
 
 
+def reject_hot_swap(command: dict, path: Path) -> None:
+    """El modelo de lenguaje lo sirve llama.cpp, que solo lo carga al arrancar. Se rechaza el
+    despliegue para que la plataforma no crea que el modelo nuevo ya está en marcha."""
+    raise RuntimeError("el modelo de lenguaje se cambia reiniciando el servidor llama.cpp con el "
+                       "nuevo archivo (variables del servicio genai-llm)")
+
+
 def make_handler(assistant: Assistant):
     """Servidor web de la pantalla local: la página, el estado y el envío de preguntas."""
     class Handler(BaseHTTPRequestHandler):
@@ -140,14 +147,11 @@ def make_handler(assistant: Assistant):
 def main() -> None:
     """Conecta con MQTT, con el modelo de lenguaje y con la API, y arranca la pantalla web."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"device-{DEVICE_ID}")
-    client.will_set(f"edge/{DEVICE_ID}/status", "offline", qos=1, retain=True)
+    client = connection.create_client(DEVICE_ID)
     agent = EdgeAgent(DEVICE_ID, client, ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "/data/models"))),
-                      float(os.getenv("EDGE_INTERVAL_S", "2")))
+                      float(os.getenv("EDGE_INTERVAL_S", "2")), loader=reject_hot_swap)
     client.on_connect, client.on_message = agent.on_connect, agent.on_message
-    client.reconnect_delay_set(1, 30)
-    client.connect_async(os.getenv("EDGE_MQTT_HOST", "localhost"), int(os.getenv("EDGE_MQTT_PORT", "1883")), 30)
-    client.loop_start()
+    connection.connect(client)
 
     assistant = Assistant(
         agent,

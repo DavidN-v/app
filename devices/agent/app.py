@@ -15,8 +15,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
-from edge_agent import system
+from edge_agent import connection, system
 from edge_agent.agent import EdgeAgent
 from edge_agent.deployer import ModelStore
 
@@ -27,6 +26,12 @@ log = logging.getLogger("agent-device")
 DEVICE_ID = os.getenv("EDGE_DEVICE_ID", "rpi5-agent")
 MODEL_NAME, MODEL_VERSION = "telemetry-agent", os.getenv("AGENT_MODEL_VERSION", "1.4")
 PORT = int(os.getenv("AGENT_PORT", "8103"))
+
+
+def reject_model_files(command: dict, path: Path) -> None:
+    """El detector de anomalías es código del propio dispositivo, no un archivo de modelo:
+    se rechaza el despliegue para que la plataforma no dé por instalado algo que no se usa."""
+    raise RuntimeError("este dispositivo no carga archivos de modelo; se actualiza con una nueva imagen")
 
 
 class Traffic:
@@ -69,14 +74,13 @@ class Device:
         self.classified = 0
         self.last_latency_ms: float | None = None
 
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"device-{DEVICE_ID}")
-        self.client.will_set(f"edge/{DEVICE_ID}/status", "offline", qos=1, retain=True)
+        self.client = connection.create_client(DEVICE_ID)
         self.agent = EdgeAgent(DEVICE_ID, self, ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "/data/models"))),
-                               float(os.getenv("EDGE_INTERVAL_S", "2")))
+                               float(os.getenv("EDGE_INTERVAL_S", "2")),
+                               loader=reject_model_files)
         self.client.on_connect = self.on_connect
         self.client.on_disconnect = lambda *a: setattr(self, "connected", False)
         self.client.on_message = self.on_message
-        self.client.reconnect_delay_set(1, 30)
 
     # El agente publica a través de este método: así se cuentan los mensajes enviados
     def publish(self, topic, payload, qos=0, retain=False):
@@ -126,8 +130,7 @@ class Device:
         }
 
     def start(self) -> None:
-        self.client.connect_async(os.getenv("EDGE_MQTT_HOST", "localhost"), int(os.getenv("EDGE_MQTT_PORT", "1883")), 30)
-        self.client.loop_start()
+        connection.connect(self.client)
         threading.Thread(target=self.agent.run, daemon=True).start()
 
 

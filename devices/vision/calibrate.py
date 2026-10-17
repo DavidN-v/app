@@ -13,8 +13,9 @@ import sys
 
 from PIL import Image
 
-from app import MODEL_PATH, SCENES_DIR, camera_frame
+from app import MODEL_PATH, SCENES_DIR
 from detector import Detector
+from sources import camera_frame
 
 BINS = [i / 10 for i in range(10)] + [1.0000001]
 
