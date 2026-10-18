@@ -27,11 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-co
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY edge-agent /tmp/edge-agent
-RUN pip install --no-cache-dir "onnxruntime>=1.18" "numpy>=1.26" "pillow>=10" /tmp/edge-agent \
- && rm -rf /tmp/edge-agent
+# OpenCV (versión sin interfaz gráfica) solo se usa para leer una cámara real
+RUN pip install --no-cache-dir "onnxruntime>=1.18" "numpy>=1.26" "pillow>=10" "opencv-python-headless>=4.9" \
+    /tmp/edge-agent && rm -rf /tmp/edge-agent
 COPY --from=export /export/yolov8n.onnx /models/yolov8n.onnx
 COPY --from=export /scenes /scenes
-COPY devices/vision/detector.py devices/vision/app.py devices/vision/calibrate.py devices/vision/screen.html ./
+COPY devices/vision/detector.py devices/vision/sources.py devices/vision/app.py devices/vision/calibrate.py \
+     devices/vision/screen.html ./
 RUN useradd --system --uid 10002 device && mkdir -p /data/models && chown -R device /data /scenes
 USER device
 EXPOSE 8101

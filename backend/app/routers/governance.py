@@ -24,7 +24,6 @@ router = APIRouter(prefix="/api", tags=["governance"])
 @router.get("/alerts", response_model=list[AlertOut])
 def list_alerts(status_: str | None = Query(None, alias="status"), limit: int = 100,
                 db: Session = Depends(get_db), _: User = Depends(current_user)):
-    """Alertas, opcionalmente filtradas por estado."""
     q = db.query(Alert)
     if status_:
         q = q.filter_by(status=status_)
@@ -34,7 +33,6 @@ def list_alerts(status_: str | None = Query(None, alias="status"), limit: int = 
 @router.post("/alerts/{alert_id}/action", response_model=AlertOut)
 def act_on_alert(alert_id: int, body: AlertAction, db: Session = Depends(get_db),
                  user: User = Depends(require_role("operator"))):
-    """Un operador reconoce una alerta (indica que la está atendiendo) o la da por resuelta."""
     alert = db.get(Alert, alert_id)
     if alert is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Alerta no encontrada")
@@ -48,15 +46,12 @@ def act_on_alert(alert_id: int, body: AlertAction, db: Session = Depends(get_db)
 
 @router.get("/policies", response_model=list[PolicyOut])
 def list_policies(db: Session = Depends(get_db), _: User = Depends(current_user)):
-    """Todas las políticas con su valor actual."""
     return db.query(Policy).order_by(Policy.key).all()
 
 
 @router.patch("/policies/{key}", response_model=PolicyOut)
 def update_policy(key: str, body: PolicyUpdate, db: Session = Depends(get_db),
                   user: User = Depends(require_role("admin"))):
-    """Cambia el valor de una política o la activa o desactiva.
-    En la auditoría se guardan el valor anterior y el nuevo."""
     policy = db.get(Policy, key)
     if policy is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Política no encontrada")
@@ -74,20 +69,17 @@ def update_policy(key: str, body: PolicyUpdate, db: Session = Depends(get_db),
 @router.get("/audit", response_model=list[AuditOut])
 def list_audit(limit: int = 200, db: Session = Depends(get_db),
                _: User = Depends(require_role("approver"))):
-    """Últimas entradas del registro de auditoría."""
     return db.query(AuditEntry).order_by(AuditEntry.id.desc()).limit(min(limit, 1000)).all()
 
 
 @router.get("/audit/verify", response_model=ChainVerification)
 def verify_audit(db: Session = Depends(get_db), _: User = Depends(require_role("approver"))):
-    """Comprueba que nadie ha alterado el registro de auditoría."""
     valid, entries, broken_at = audit.verify_chain(db)
     return ChainVerification(valid=valid, entries=entries, broken_at=broken_at)
 
 
 @router.get("/overview")
 def overview(db: Session = Depends(get_db), _: User = Depends(current_user)):
-    """Datos de la vista general: recuentos, medias de los dispositivos en línea y latencias recientes."""
     devices = db.query(Device).all()
     online = [d for d in devices if d.status == "online"]
 

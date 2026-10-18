@@ -1,0 +1,79 @@
+"""Origen de las imágenes que analiza el dispositivo de visión."""
+
+import logging
+import random
+import time
+
+from PIL import Image, ImageEnhance, ImageFilter
+
+log = logging.getLogger("vision")
+
+
+def camera_frame(scene: Image.Image, dirty: bool) -> Image.Image:
+    w, h = scene.size
+    dx, dy = random.randint(0, w // 20), random.randint(0, h // 20)
+    frame = scene.crop((dx, dy, w - w // 20 + dx, h - h // 20 + dy))
+    frame = ImageEnhance.Brightness(frame).enhance(random.uniform(0.9, 1.1))
+    if dirty:
+        frame = frame.filter(ImageFilter.GaussianBlur(random.uniform(5, 8)))
+        frame = ImageEnhance.Brightness(frame).enhance(0.45)
+        frame = ImageEnhance.Contrast(frame).enhance(0.6)
+    return frame
+
+
+class SceneSource:
+
+    def __init__(self, scenes: list[Image.Image], scene_seconds: float, dirty_every: float,
+                 dirty_for: float) -> None:
+        self.scenes, self.scene_seconds = scenes, scene_seconds
+        self.dirty_every, self.dirty_for = dirty_every, dirty_for
+        self.start = self.scene_since = time.time()
+        self.index = 0
+
+    @property
+    def width(self) -> int:
+        return self.scenes[0].width
+
+    def read(self) -> tuple[Image.Image, str]:
+        now = time.time()
+        if now - self.scene_since > self.scene_seconds:
+            self.index, self.scene_since = (self.index + 1) % len(self.scenes), now
+        elapsed = now - self.start
+        dirty = self.dirty_every > 0 and (elapsed % self.dirty_every) > (self.dirty_every - self.dirty_for)
+        return camera_frame(self.scenes[self.index], dirty), "sucia" if dirty else "limpia"
+
+
+def parse_camera(spec: str) -> int | str:
+    spec = spec.strip()
+    return int(spec) if spec.isdigit() else spec
+
+
+class CameraSource:
+
+    def __init__(self, spec: str) -> None:
+        import cv2  # solo hace falta con cámara real
+
+        self.cv2 = cv2
+        self.target = parse_camera(spec)
+        self.capture = None
+        self.width = 1280
+        self._open()
+
+    def _open(self) -> None:
+        if self.capture is not None:
+            self.capture.release()
+        self.capture = self.cv2.VideoCapture(self.target)
+        if self.capture.isOpened():
+            self.width = int(self.capture.get(self.cv2.CAP_PROP_FRAME_WIDTH)) or self.width
+            log.info("Cámara %s abierta", self.target)
+        else:
+            log.warning("No se pudo abrir la cámara %s; se reintentará", self.target)
+
+    def read(self) -> tuple[Image.Image, str]:
+        ok, frame = self.capture.read() if self.capture is not None else (False, None)
+        while not ok:
+            time.sleep(2)
+            self._open()
+            ok, frame = self.capture.read()
+        # OpenCV entrega los colores en orden BGR; la red y la pantalla esperan RGB
+        return Image.fromarray(self.cv2.cvtColor(frame, self.cv2.COLOR_BGR2RGB)), "cámara"

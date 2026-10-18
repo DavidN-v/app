@@ -1,10 +1,4 @@
-"""Tareas que se ejecutan periódicamente en segundo plano (cada 5 segundos).
-
-- Detectar dispositivos que han dejado de enviar datos.
-- Calcular el drift de los modelos y abrir o cerrar las alertas correspondientes.
-- Guardar en la base de datos las latencias medias de cada minuto.
-- Dar por fallidos los despliegues que no reciben respuesta a tiempo.
-"""
+"""Tareas que se ejecutan periódicamente en segundo plano (cada 5 segundos)."""
 
 import asyncio
 import contextlib
@@ -27,11 +21,6 @@ MIN_DRIFT_SAMPLES = 50
 
 
 def check_heartbeats(db: Session) -> list[str]:
-    """Marca como desconectados los dispositivos que llevan demasiado tiempo sin enviar nada.
-
-    Complementa el aviso de desconexión del broker, que no llega si el que falla es el broker
-    o la red intermedia. Devuelve los identificadores de los dispositivos afectados.
-    """
     cutoff = utcnow() - timedelta(seconds=get_settings().offline_after_s)
     stale = []
     for device in db.query(Device).filter_by(status="online"):
@@ -51,11 +40,6 @@ def check_heartbeats(db: Session) -> list[str]:
 
 
 def check_drift(db: Session) -> dict[str, float]:
-    """Calcula el PSI de cada dispositivo frente a la referencia de su modelo actual.
-
-    Solo se usan las confianzas del modelo que figura en el registro, para no mezclar
-    datos de modelos distintos. Devuelve el PSI calculado para cada dispositivo.
-    """
     threshold = policies.load(db).number("max_drift_psi", 0.2)
     results = {}
     for device in db.query(Device).filter(Device.current_model_id.isnot(None)):
@@ -78,7 +62,6 @@ def check_drift(db: Session) -> dict[str, float]:
 
 
 def flush_latency(db: Session, now: float | None = None) -> int:
-    """Pasa a la base de datos las medias de latencia de los minutos que ya han terminado."""
     rows = hub.drain_buckets(now if now is not None else time.time())
     for device_id, minute, avg, peak, count in rows:
         db.add(LatencyMinute(device_id=device_id, minute=datetime.fromtimestamp(minute, UTC),
@@ -88,7 +71,6 @@ def flush_latency(db: Session, now: float | None = None) -> int:
 
 
 def check_deploy_timeouts(db: Session) -> list[int]:
-    """Un despliegue sin confirmación dentro del plazo de la política se da por fallido."""
     timeout = policies.load(db).number("deploy_timeout_s", 120)
     cutoff = utcnow() - timedelta(seconds=timeout)
     expired = []
@@ -109,8 +91,6 @@ def check_deploy_timeouts(db: Session) -> list[int]:
 
 
 async def run_forever(stop: asyncio.Event) -> None:
-    """Bucle principal de las tareas. Las consultas a la base de datos se ejecutan en hilos
-    aparte para no bloquear la atención de las peticiones web mientras tanto."""
     settings = get_settings()
     ticks = 0
     while not stop.is_set():

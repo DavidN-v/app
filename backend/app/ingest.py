@@ -1,18 +1,4 @@
-"""Procesamiento de los mensajes que envían los dispositivos por MQTT.
-
-Cada dispositivo publica en temas con la forma edge/{id}/{tipo}:
-  edge/{id}/telemetry        {"cpu": 18.2, "ram": 42.0, "temp": 51.3}
-  edge/{id}/inference        {"model": "yolo", "version": "8.1", "latency_ms": 28, "confidence": 0.92}
-  edge/{id}/status           "online" | "offline"
-  edge/{id}/deploy/progress  {"deployment_id": 3, "stage": "downloading" | "verifying" | "installing"}
-  edge/{id}/deploy/ack       {"deployment_id": 3, "status": "succeeded" | "failed", "message": ""}
-
-El mensaje "offline" lo publica el propio broker cuando un dispositivo se desconecta sin
-avisar (es el "último mensaje" que el dispositivo deja registrado al conectarse).
-
-Con cada mensaje se actualiza el estado del dispositivo, se comprueban los umbrales de las
-políticas para abrir o cerrar alertas y se reenvía el dato a la consola en tiempo real.
-"""
+"""Procesamiento de los mensajes que envían los dispositivos por MQTT."""
 
 import json
 import logging
@@ -29,13 +15,11 @@ log = logging.getLogger(__name__)
 # Una alerta de umbral se cierra sola cuando el valor baja del 90 % del límite.
 # El margen evita que una métrica que ronda el límite abra y cierre alertas sin parar.
 HYSTERESIS = 0.9
-# Número de inferencias recientes con las que se calcula la latencia media
 LATENCY_WINDOW = 10
 
 
 def _threshold(db: Session, device: Device, kind: str, value: float, limit: float,
                severity: str, message: str) -> None:
-    """Abre una alerta si el valor supera el límite y la cierra si vuelve a estar por debajo del margen."""
     if value > limit:
         raise_alert(db, device.id, kind, severity, message)
     elif value <= limit * HYSTERESIS:
@@ -43,10 +27,6 @@ def _threshold(db: Session, device: Device, kind: str, value: float, limit: floa
 
 
 def handle(db: Session, topic: str, payload: bytes, retained: bool = False) -> None:
-    """Punto de entrada: identifica el dispositivo y el tipo de mensaje y lo envía a su función.
-
-    Un mensaje mal formado se descarta y se deja constancia en el registro, sin detener el sistema.
-    """
     parts = topic.split("/")
     if len(parts) < 3 or parts[0] != "edge":
         return
@@ -55,7 +35,6 @@ def handle(db: Session, topic: str, payload: bytes, retained: bool = False) -> N
 
     device = db.get(Device, device_id)
     if device is None:
-        # Un dispositivo que no está dado de alta nunca se acepta sin avisar
         raise_alert(db, device_id, "unregistered_device", "warning",
                     f"Mensaje de dispositivo no registrado '{device_id}' en {topic}")
         db.commit()
@@ -81,19 +60,16 @@ def handle(db: Session, topic: str, payload: bytes, retained: bool = False) -> N
 
 
 def _mark_online(db: Session, device: Device) -> None:
-    """Marca el dispositivo como conectado; si antes estaba desconectado, avisa a la consola."""
     was_offline = device.status != "online"
     device.status = "online"
     device.last_seen = utcnow()
     prom.DEVICE_UP.labels(device.id).set(1)
     if was_offline:
         hub.broadcast({"type": "device_status", "data": {"id": device.id, "status": "online"}})
-        # La condición desapareció: se cierran solas las alertas de desconexión
         resolve_alerts(db, device.id, "offline")
 
 
 def _on_status(db: Session, device: Device, status: str, retained: bool = False) -> None:
-    """Cambio de estado anunciado por el dispositivo o por el broker en su nombre."""
     if status == "online":
         _mark_online(db, device)
     elif status == "offline":
@@ -106,7 +82,6 @@ def _on_status(db: Session, device: Device, status: str, retained: bool = False)
 
 
 def _on_telemetry(db: Session, device: Device, data: dict) -> None:
-    """Lectura periódica de CPU, RAM y temperatura: se guarda y se compara con las políticas."""
     device.cpu = float(data["cpu"])
     device.ram = float(data["ram"])
     device.temp = float(data["temp"]) if data.get("temp") is not None else None
@@ -138,7 +113,6 @@ def _on_telemetry(db: Session, device: Device, data: dict) -> None:
 
 
 def _on_inference(db: Session, device: Device, data: dict) -> None:
-    """Resultado de una inferencia: latencia, confianza y modelo que la ha realizado."""
     latency = float(data["latency_ms"])
     model_label = f"{data.get('model', 'unknown')}:{data.get('version', '?')}"
     device.latency_ms = latency
@@ -162,11 +136,6 @@ def _on_inference(db: Session, device: Device, data: dict) -> None:
 
 
 def _check_model(db: Session, device: Device, data: dict) -> None:
-    """Comprueba que el dispositivo ejecuta el modelo que figura en el registro.
-
-    Si no coincide, alguien ha instalado un modelo sin pasar por el proceso de aprobación,
-    lo cual es justo lo que la gobernanza debe detectar.
-    """
     reported, version = data.get("model"), data.get("version")
     current = device.current_model
     if not reported or current is None:
@@ -183,7 +152,6 @@ PROGRESS_STAGES = ("downloading", "verifying", "installing")
 
 
 def _on_deploy_progress(db: Session, device: Device, data: dict) -> None:
-    """Avance de una instalación en curso (descarga, verificación, instalación)."""
     stage = str(data["stage"])
     dep = db.get(Deployment, int(data["deployment_id"]))
     if stage not in PROGRESS_STAGES or dep is None or dep.device_id != device.id or dep.status != "pending":
@@ -196,7 +164,6 @@ def _on_deploy_progress(db: Session, device: Device, data: dict) -> None:
 
 
 def _on_deploy_ack(db: Session, device: Device, data: dict) -> None:
-    """Respuesta final del dispositivo a una orden de despliegue: éxito o fallo."""
     dep = db.get(Deployment, int(data["deployment_id"]))
     if dep is None or dep.device_id != device.id or dep.status != "pending":
         return
@@ -208,8 +175,9 @@ def _on_deploy_ack(db: Session, device: Device, data: dict) -> None:
         device.current_model_id = dep.model_id
         if dep.model.status == "approved":
             dep.model.status = "deployed"
-        # El drift medido era del modelo anterior
         resolve_alerts(db, device.id, "drift")
+        # Un despliegue correcto deja atrás los intentos fallidos anteriores en este dispositivo
+        resolve_alerts(db, device.id, "deployment_failed")
     else:
         dep.status = "failed"
         dep.stage = "failed"

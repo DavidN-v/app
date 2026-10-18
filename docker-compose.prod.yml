@@ -1,0 +1,27 @@
+# Configuración para conectar dispositivos físicos con cifrado TLS.
+# Se usa junto al archivo principal:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Requisitos: haber generado los certificados con infra/mosquitto/generar-certificados.sh.
+# El broker solo acepta conexiones cifradas en el puerto 8883 y cada dispositivo se identifica
+# con su propio certificado. Los perfiles demo y real (simulador y placas emuladas) están pensados
+# para el desarrollo y no se usan con esta configuración.
+services:
+  mosquitto:
+    ports: ["8883:8883"]
+    volumes:
+      - ./infra/mosquitto/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./infra/mosquitto/acl:/mosquitto/config/acl:ro
+      - ./infra/mosquitto/certs:/mosquitto/certs:ro
+
+  api:
+    environment:
+      EG_MQTT_PORT: 8883
+      EG_MQTT_TLS: "true"
+      EG_MQTT_CA: /certs/ca.crt
+      EG_MQTT_CERT: /certs/governance-api.crt
+      EG_MQTT_KEY: /certs/governance-api.key
+      # Sin datos de demostración: los dispositivos y usuarios reales se crean desde la consola
+      EG_SEED_DEMO_DATA: ${EG_SEED_DEMO_DATA:-false}
+    volumes:
+      - ./infra/mosquitto/certs:/certs:ro

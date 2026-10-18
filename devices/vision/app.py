@@ -1,48 +1,62 @@
-"""Raspberry Pi 5 · Visión artificial (dispositivo real en contenedor).
-
-- Ejecuta YOLOv8n con ONNX Runtime sobre escenas reales (imágenes de COCO val2017).
-- Publica telemetría, latencia y confianza reales en la plataforma vía el agente edge.
-- Sirve su pantalla local en http://<host>:8101 con el vídeo anotado.
-- Incidente programado: la "lente se ensucia" (desenfoque y poca luz) y la confianza del modelo
-  baja de verdad, lo que la plataforma detecta como drift.
-"""
+"""Raspberry Pi 5 · Visión artificial."""
 
 import io
 import json
 import logging
 import os
-import random
 import threading
 import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
+from edge_agent import connection
 from edge_agent.agent import EdgeAgent
 from edge_agent.deployer import ModelStore
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 from detector import Detection, Detector
+from sources import CameraSource, SceneSource
 
 log = logging.getLogger("vision")
 
 DEVICE_ID = os.getenv("EDGE_DEVICE_ID", "rpi5-vision")
 MODEL_PATH = os.getenv("VISION_MODEL", "/models/yolov8n.onnx")
-MODEL_NAME, MODEL_VERSION = "yolo", os.getenv("VISION_MODEL_VERSION", "8.1")
+MODEL_NAME = os.getenv("VISION_MODEL_NAME", "yolo")
+MODEL_VERSION = os.getenv("VISION_MODEL_VERSION", "8.1")
+# Cámara real (número, /dev/videoN o URL de vídeo). Vacío = fotografías de prueba
+CAMERA = os.getenv("VISION_CAMERA", "")
 SCENES_DIR = Path(os.getenv("VISION_SCENES", "/scenes"))
-TARGET_FPS = float(os.getenv("VISION_FPS", "4"))
+TARGET_FPS = float(os.getenv("VISION_FPS", "2"))
 SCENE_SECONDS = float(os.getenv("VISION_SCENE_SECONDS", "6"))
 # Cada DIRTY_EVERY segundos, la lente se ensucia durante DIRTY_FOR segundos (0 = nunca)
-DIRTY_EVERY = float(os.getenv("VISION_DIRTY_EVERY", "300"))
+DIRTY_EVERY = float(os.getenv("VISION_DIRTY_EVERY", "600"))
 DIRTY_FOR = float(os.getenv("VISION_DIRTY_FOR", "60"))
 PORT = int(os.getenv("VISION_PORT", "8101"))
 
 PALETTE = ["#38bdf8", "#4af626", "#facc15", "#f472b6", "#c084fc", "#fb923c", "#34d399"]
 
 
+class ActiveModel:
+
+    def __init__(self, detector: Detector, name: str, version: str) -> None:
+        self.lock = threading.Lock()
+        self.detector, self.name, self.version = detector, name, version
+
+    def get(self) -> tuple[Detector, str, str]:
+        with self.lock:
+            return self.detector, self.name, self.version
+
+    def load(self, command: dict, path: Path) -> None:
+        if command.get("framework", "onnx") != "onnx":
+            raise ValueError(f"este dispositivo solo ejecuta modelos ONNX, no {command.get('framework')}")
+        detector = Detector(str(path))  # si el archivo no es un modelo válido, falla aquí
+        with self.lock:
+            self.detector, self.name, self.version = detector, command["model"], command["version"]
+        log.info("Modelo %s v%s cargado desde %s", command["model"], command["version"], path)
+
+
 class Screen:
-    """Estado compartido entre el bucle de inferencia y la pantalla web."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -69,21 +83,7 @@ def load_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def camera_frame(scene: Image.Image, dirty: bool) -> Image.Image:
-    """Simula la cámara: encuadre que tiembla un poco, luz que varía y, si toca, lente sucia."""
-    w, h = scene.size
-    dx, dy = random.randint(0, w // 20), random.randint(0, h // 20)
-    frame = scene.crop((dx, dy, w - w // 20 + dx, h - h // 20 + dy))
-    frame = ImageEnhance.Brightness(frame).enhance(random.uniform(0.9, 1.1))
-    if dirty:
-        frame = frame.filter(ImageFilter.GaussianBlur(random.uniform(5, 8)))
-        frame = ImageEnhance.Brightness(frame).enhance(0.45)
-        frame = ImageEnhance.Contrast(frame).enhance(0.6)
-    return frame
-
-
 def annotate(frame: Image.Image, detections: list[Detection], font: ImageFont.ImageFont) -> Image.Image:
-    """Dibuja sobre el fotograma una caja y una etiqueta por cada objeto detectado."""
     img = frame.convert("RGB")
     draw = ImageDraw.Draw(img)
     stroke = max(2, img.width // 300)
@@ -99,23 +99,16 @@ def annotate(frame: Image.Image, detections: list[Detection], font: ImageFont.Im
     return img
 
 
-def inference_loop(agent: EdgeAgent, detector: Detector, scenes: list[Image.Image], screen: Screen) -> None:
-    """Bucle principal: genera un fotograma, lo analiza, informa a la plataforma y actualiza la pantalla.
-    Se cambia de escena cada SCENE_SECONDS segundos y se mantiene el ritmo de TARGET_FPS."""
-    font = load_font(max(14, scenes[0].width // 40))
-    start = time.time()
-    scene_idx, scene_since = 0, time.time()
+def inference_loop(agent: EdgeAgent, model: ActiveModel, source, screen: Screen) -> None:
+    font = load_font(max(14, source.width // 40))
     frames, fps, fps_since = 0, 0.0, time.time()
     period = 1 / TARGET_FPS
     while True:
         t0 = time.time()
-        if t0 - scene_since > SCENE_SECONDS:
-            scene_idx, scene_since = (scene_idx + 1) % len(scenes), t0
-        elapsed = t0 - start
-        dirty = DIRTY_EVERY > 0 and (elapsed % DIRTY_EVERY) > (DIRTY_EVERY - DIRTY_FOR)
-        frame = camera_frame(scenes[scene_idx], dirty)
+        frame, lens = source.read()
+        detector, name, version = model.get()
 
-        with agent.track_inference(MODEL_NAME, MODEL_VERSION) as trace:
+        with agent.track_inference(name, version) as trace:
             detections = detector(frame)
             # La confianza que se reporta es la del objeto más claro: es la que vigila el drift
             trace.confidence = round(detections[0].score, 3) if detections else 0.05
@@ -128,9 +121,9 @@ def inference_loop(agent: EdgeAgent, detector: Detector, scenes: list[Image.Imag
         buf = io.BytesIO()
         annotate(frame, detections, font).save(buf, format="JPEG", quality=80)
         screen.update(buf.getvalue(), {
-            "device": DEVICE_ID, "model": f"YOLOv8n ({MODEL_NAME} {MODEL_VERSION}) · ONNX Runtime",
+            "device": DEVICE_ID, "model": f"{name} {version} · ONNX Runtime",
             "objects": len(detections), "fps": round(fps, 1), "latency_ms": round(latency, 1),
-            "lens": "sucia" if dirty else "limpia",
+            "lens": lens,
             "detections": [{"label": d.label, "score": round(d.score, 3)} for d in detections[:8]],
         })
         time.sleep(max(0.0, period - (time.time() - t0)))
@@ -181,25 +174,32 @@ def make_handler(screen: Screen):
 
 
 def main() -> None:
-    """Carga el modelo y las escenas, conecta con MQTT y arranca la pantalla web."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    scenes = [Image.open(p).convert("RGB") for p in sorted(SCENES_DIR.glob("*.jpg"))]
-    if not scenes:
-        raise SystemExit(f"No hay escenas en {SCENES_DIR}")
-    detector = Detector(MODEL_PATH)
-    log.info("Modelo %s cargado; %d escenas", MODEL_PATH, len(scenes))
+    if CAMERA:
+        source = CameraSource(CAMERA)
+    else:
+        scenes = [Image.open(p).convert("RGB") for p in sorted(SCENES_DIR.glob("*.jpg"))]
+        if not scenes:
+            raise SystemExit(f"No hay escenas en {SCENES_DIR}")
+        source = SceneSource(scenes, SCENE_SECONDS, DIRTY_EVERY, DIRTY_FOR)
 
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"device-{DEVICE_ID}")
-    client.will_set(f"edge/{DEVICE_ID}/status", "offline", qos=1, retain=True)
-    agent = EdgeAgent(DEVICE_ID, client, ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "/data/models"))),
-                      float(os.getenv("EDGE_INTERVAL_S", "2")))
+    # Si un despliegue anterior instaló otro modelo, se arranca con ese y no con el de la imagen
+    store = ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "/data/models")))
+    installed = store.manifest().get("current")
+    if installed and Path(installed["path"]).exists():
+        model = ActiveModel(Detector(installed["path"]), installed["model"], installed["version"])
+    else:
+        model = ActiveModel(Detector(MODEL_PATH), MODEL_NAME, MODEL_VERSION)
+    log.info("Modelo %s v%s en marcha; imágenes de %s", model.name, model.version, CAMERA or SCENES_DIR)
+
+    client = connection.create_client(DEVICE_ID)
+    agent = EdgeAgent(DEVICE_ID, client, store,
+                      float(os.getenv("EDGE_INTERVAL_S", "2")), loader=model.load)
     client.on_connect, client.on_message = agent.on_connect, agent.on_message
-    client.reconnect_delay_set(1, 30)
-    client.connect_async(os.getenv("EDGE_MQTT_HOST", "localhost"), int(os.getenv("EDGE_MQTT_PORT", "1883")), 30)
-    client.loop_start()
+    connection.connect(client)
 
     screen = Screen()
-    threading.Thread(target=inference_loop, args=(agent, detector, scenes, screen), daemon=True).start()
+    threading.Thread(target=inference_loop, args=(agent, model, source, screen), daemon=True).start()
     threading.Thread(target=agent.run, daemon=True).start()  # telemetría del sistema
     log.info("Pantalla local en http://0.0.0.0:%d", PORT)
     ThreadingHTTPServer(("0.0.0.0", PORT), make_handler(screen)).serve_forever()

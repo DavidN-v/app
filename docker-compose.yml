@@ -43,6 +43,7 @@ services:
       EG_ADMIN_PASSWORD: ${EG_ADMIN_PASSWORD:-admin123}
       EG_APPROVER_PASSWORD: ${EG_APPROVER_PASSWORD:-approver123}
       EG_OPERATOR_PASSWORD: ${EG_OPERATOR_PASSWORD:-operator123}
+      EG_VIEWER_PASSWORD: ${EG_VIEWER_PASSWORD:-viewer123}
       EG_SEED_DEMO_DATA: ${EG_SEED_DEMO_DATA:-true}
       EG_CORS_ORIGINS: '["http://localhost:8080","http://localhost:4200"]'
     depends_on:
@@ -104,7 +105,7 @@ services:
       EDGE_BOARD_RAM_MB: "4096"
       EDGE_MQTT_HOST: mosquitto
       VISION_FPS: ${VISION_FPS:-2}
-      VISION_DIRTY_EVERY: ${VISION_DIRTY_EVERY:-300}
+      VISION_DIRTY_EVERY: ${VISION_DIRTY_EVERY:-600}
     volumes: [vision-models:/data/models]
     depends_on: [mosquitto, api]
     ports: ["8101:8101"]
@@ -150,6 +151,8 @@ services:
       EDGE_MQTT_HOST: mosquitto
       LLM_URL: http://genai-llm:8080
       GOV_API_URL: http://api:8000
+      GOV_USER: viewer
+      GOV_PASSWORD: ${EG_VIEWER_PASSWORD:-viewer123}
       GENAI_AUTO_ASK_S: ${GENAI_AUTO_ASK_S:-20}
     # Comparte el espacio de procesos con llama.cpp: los dos forman la misma placa,
     # así el consumo del modelo de lenguaje cuenta en la CPU y RAM de rpi5-genai

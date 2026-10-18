@@ -1,17 +1,4 @@
-"""Agente que se ejecuta en cada dispositivo edge.
-
-Sus tareas son tres: enviar periódicamente el estado del dispositivo (CPU, RAM y
-temperatura), informar de cada inferencia que hace el modelo e instalar los modelos que
-ordena la plataforma (despliegue OTA, es decir, a distancia y sin intervención manual).
-
-Uso en un dispositivo:
-    EDGE_DEVICE_ID=rpi5-vision EDGE_MQTT_HOST=192.168.1.10 python -m edge_agent.agent
-
-Para medir inferencias desde tu propio código:
-    with agent.track_inference("yolo", "8.1") as t:
-        boxes = session.run(...)
-        t.confidence = float(boxes[0].score)
-"""
+"""Agente que se ejecuta en cada dispositivo edge."""
 
 import json
 import logging
@@ -22,49 +9,43 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
-
-from . import system
-from .deployer import ModelStore
+from . import connection, system
+from .deployer import InstallResult, ModelStore
 
 log = logging.getLogger("edge_agent")
 
 
 @dataclass
 class InferenceTrace:
-    """Datos que el código de inferencia puede añadir a la medición (por ahora, la confianza)."""
 
     confidence: float | None = None
 
 
 class EdgeAgent:
-    """Lógica del agente, separada de la conexión MQTT para poder probarla con un cliente falso."""
 
-    def __init__(self, device_id: str, client, store: ModelStore, interval_s: float = 5.0) -> None:
+    def __init__(self, device_id: str, client, store: ModelStore, interval_s: float = 5.0,
+                 loader=None) -> None:
         self.device_id = device_id
+        self.loader = loader
         self.client = client
         self.store = store
         self.interval_s = interval_s
         self._stop = threading.Event()
 
     def topic(self, suffix: str) -> str:
-        """Tema MQTT propio del dispositivo, por ejemplo edge/rpi5-vision/telemetry."""
         return f"edge/{self.device_id}/{suffix}"
 
-    # --- publicación ---------------------------------------------------------
     def publish(self, suffix: str, payload, qos: int = 0, retain: bool = False) -> None:
         body = payload if isinstance(payload, str) else json.dumps(payload)
         self.client.publish(self.topic(suffix), body, qos=qos, retain=retain)
 
     def publish_telemetry(self) -> dict:
-        """Mide el estado del dispositivo y lo envía."""
         data = system.collect()
         self.publish("telemetry", data)
         return data
 
     @contextmanager
     def track_inference(self, model: str, version: str):
-        """Mide lo que tarda el bloque de código que envuelve y publica el resultado al terminar."""
         trace = InferenceTrace()
         start = time.perf_counter()
         yield trace
@@ -73,9 +54,7 @@ class EdgeAgent:
                                    "latency_ms": round(latency, 2),
                                    "confidence": trace.confidence})
 
-    # --- despliegues ---------------------------------------------------------
     def handle_deploy(self, raw: bytes) -> dict:
-        """Ejecuta una orden de despliegue: informa de cada etapa y al final envía el resultado."""
         try:
             command = json.loads(raw)
             deployment_id = command["deployment_id"]
@@ -86,6 +65,12 @@ class EdgeAgent:
             self.publish("deploy/progress", {"deployment_id": deployment_id, "stage": stage}, qos=1)
 
         result = self.store.install(command, progress=progress)
+        if result.ok and self.loader is not None:
+            try:
+                self.loader(command, result.path)
+            except Exception as exc:  # cualquier fallo al cargar deja el modelo anterior en marcha
+                self.store.revert()
+                result = InstallResult(False, f"Descargado y verificado, pero no se pudo cargar: {exc}")
         ack = {"deployment_id": deployment_id,
                "status": "succeeded" if result.ok else "failed",
                "message": result.message}
@@ -99,14 +84,11 @@ class EdgeAgent:
             threading.Thread(target=self.handle_deploy, args=(msg.payload,), daemon=True).start()
 
     def on_connect(self, client, userdata, flags, reason_code, properties) -> None:
-        """Al conectar (o reconectar) se suscribe a sus órdenes y anuncia que está en línea."""
         log.info("Conectado al broker (%s)", reason_code)
         client.subscribe(self.topic("deploy"), qos=1)
         self.publish("status", "online", qos=1, retain=True)
 
-    # --- ciclo de vida -------------------------------------------------------
     def run(self) -> None:
-        """Envía la telemetría cada interval_s segundos hasta que se pida parar."""
         while not self._stop.wait(self.interval_s):
             try:
                 self.publish_telemetry()
@@ -118,27 +100,16 @@ class EdgeAgent:
 
 
 def main() -> None:
-    """Arranque del agente. Toda la configuración llega por variables de entorno EDGE_*."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     device_id = os.environ["EDGE_DEVICE_ID"]
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"agent-{device_id}")
-    if user := os.getenv("EDGE_MQTT_USERNAME"):
-        client.username_pw_set(user, os.getenv("EDGE_MQTT_PASSWORD"))
-    if os.getenv("EDGE_MQTT_TLS") == "1":
-        client.tls_set(ca_certs=os.getenv("EDGE_MQTT_CA"), certfile=os.getenv("EDGE_MQTT_CERT"),
-                       keyfile=os.getenv("EDGE_MQTT_KEY"))
-    # Último mensaje: si el agente se cae sin despedirse, el broker publica "offline" en su nombre
-    client.will_set(f"edge/{device_id}/status", "offline", qos=1, retain=True)
+    client = connection.create_client(device_id, client_id=f"agent-{device_id}")
 
     agent = EdgeAgent(device_id, client,
                       ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "./models"))),
                       float(os.getenv("EDGE_INTERVAL_S", "5")))
     client.on_connect = agent.on_connect
     client.on_message = agent.on_message
-    client.reconnect_delay_set(1, 30)
-    client.connect_async(os.getenv("EDGE_MQTT_HOST", "localhost"),
-                         int(os.getenv("EDGE_MQTT_PORT", "1883")), keepalive=30)
-    client.loop_start()
+    connection.connect(client)
     try:
         agent.run()
     except KeyboardInterrupt:

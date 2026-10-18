@@ -1,10 +1,4 @@
-"""Raspberry Pi 5 · Agente de dispositivos (real en contenedor).
-
-- Envía su propia telemetría con el agente edge, como cualquier otro dispositivo.
-- Escucha la telemetría de toda la flota por MQTT y analiza cada lectura con un detector de
-  anomalías (ver anomaly.py). Ese detector es su "modelo": su latencia y su confianza son reales.
-- Pantalla local en :8103 con estado, tiempo activo y tráfico MQTT de los últimos 60 s.
-"""
+"""Raspberry Pi 5 · Agente de dispositivos (real en contenedor)."""
 
 import json
 import logging
@@ -15,8 +9,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
-from edge_agent import system
+from edge_agent import connection, system
 from edge_agent.agent import EdgeAgent
 from edge_agent.deployer import ModelStore
 
@@ -29,8 +22,11 @@ MODEL_NAME, MODEL_VERSION = "telemetry-agent", os.getenv("AGENT_MODEL_VERSION", 
 PORT = int(os.getenv("AGENT_PORT", "8103"))
 
 
+def reject_model_files(command: dict, path: Path) -> None:
+    raise RuntimeError("este dispositivo no carga archivos de modelo; se actualiza con una nueva imagen")
+
+
 class Traffic:
-    """Mensajes MQTT enviados y recibidos por segundo (últimos 60 s)."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -58,7 +54,6 @@ class Traffic:
 
 
 class Device:
-    """El dispositivo agente: conexión MQTT, detector y datos que muestra su pantalla."""
 
     def __init__(self) -> None:
         self.started = time.time()
@@ -69,16 +64,14 @@ class Device:
         self.classified = 0
         self.last_latency_ms: float | None = None
 
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"device-{DEVICE_ID}")
-        self.client.will_set(f"edge/{DEVICE_ID}/status", "offline", qos=1, retain=True)
+        self.client = connection.create_client(DEVICE_ID)
         self.agent = EdgeAgent(DEVICE_ID, self, ModelStore(Path(os.getenv("EDGE_MODELS_DIR", "/data/models"))),
-                               float(os.getenv("EDGE_INTERVAL_S", "2")))
+                               float(os.getenv("EDGE_INTERVAL_S", "2")),
+                               loader=reject_model_files)
         self.client.on_connect = self.on_connect
         self.client.on_disconnect = lambda *a: setattr(self, "connected", False)
         self.client.on_message = self.on_message
-        self.client.reconnect_delay_set(1, 30)
 
-    # El agente publica a través de este método: así se cuentan los mensajes enviados
     def publish(self, topic, payload, qos=0, retain=False):
         self.traffic.add(sent=1)
         return self.client.publish(topic, payload, qos=qos, retain=retain)
@@ -101,7 +94,6 @@ class Device:
         self.agent.on_message(client, userdata, msg)
 
     def classify(self, device: str, payload: bytes) -> None:
-        """Analiza una lectura de otro dispositivo y guarda las anomalías para la pantalla."""
         try:
             reading = json.loads(payload)
         except ValueError:
@@ -115,7 +107,6 @@ class Device:
                                        "value": reading.get(verdict.worst_metric), "ts": time.time()})
 
     def state(self) -> dict:
-        """Datos que consulta la pantalla local cada segundo."""
         sent, received = self.traffic.snapshot()
         sysinfo = system.collect()
         return {
@@ -126,8 +117,7 @@ class Device:
         }
 
     def start(self) -> None:
-        self.client.connect_async(os.getenv("EDGE_MQTT_HOST", "localhost"), int(os.getenv("EDGE_MQTT_PORT", "1883")), 30)
-        self.client.loop_start()
+        connection.connect(self.client)
         threading.Thread(target=self.agent.run, daemon=True).start()
 
 
@@ -135,7 +125,6 @@ PAGE = (Path(__file__).parent / "screen.html").read_bytes()
 
 
 def make_handler(device: Device):
-    """Servidor web de la pantalla local."""
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args) -> None:
             pass

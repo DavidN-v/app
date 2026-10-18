@@ -1,12 +1,4 @@
-"""Entrena el regresor ambiental del ESP32 y lo exporta a src/model_data.h.
-
-Entrada: temperatura (°C), humedad relativa (%) y CO2 (ppm).
-Salida: índice de confort 0-100 (100 = condiciones ideales de una sala técnica).
-
-Uso (desde firmware/esp32):
-    docker run --rm -v "$PWD:/w" -w /w python:3.11-slim \
-        sh -c "pip install -q tensorflow-cpu==2.15.1 && python model/train.py"
-"""
+"""Entrena el regresor ambiental del ESP32 y lo exporta a src/model_data.h."""
 
 from pathlib import Path
 
@@ -19,13 +11,11 @@ OUT_HEADER = HERE.parent / "src" / "model_data.h"
 
 
 def comfort(t, h, co2):
-    """Índice de referencia: penaliza desviarse de 22 °C, 50 % HR y CO2 por encima de 600 ppm."""
     score = 100 - 6 * np.abs(t - 22) - 0.8 * np.abs(h - 50) - 0.04 * np.clip(co2 - 600, 0, None)
     return np.clip(score, 0, 100)
 
 
 def dataset(n, rng):
-    """Genera n lecturas aleatorias con su índice de confort y un poco de ruido de medida."""
     t = rng.uniform(10, 40, n)
     h = rng.uniform(15, 90, n)
     co2 = rng.uniform(400, 2000, n)
@@ -35,7 +25,6 @@ def dataset(n, rng):
 
 
 def main():
-    """Entrena, comprueba el modelo convertido y escribe el archivo de cabecera para el firmware."""
     tf.random.set_seed(7)
     rng = np.random.default_rng(7)
     x, y = dataset(20000, rng)

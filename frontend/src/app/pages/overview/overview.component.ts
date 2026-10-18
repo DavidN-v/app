@@ -15,18 +15,13 @@ import { SortState } from '../../shared/sort';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { TimeAgoPipe } from '../../shared/time-ago.pipe';
 
-/** Cada cuánto se recarga el resumen y el historial de la gráfica. */
 const REFRESH_MS = 15_000;
 const HISTORY_REFRESH_MS = 60_000;
-/** Líneas visibles en el registro en vivo. */
 const LOG_LINES = 18;
-/** Número de segmentos de las barras de CPU y RAM. */
 const SEGMENTS = 20;
-/** Clave donde se recuerda la ventana de tiempo elegida para la gráfica. */
 const RANGE_KEY = 'eg.latency.window';
 const WINDOW_SECONDS: Record<LatencyWindow, number> = { '5m': 300, '1h': 3600, '24h': 86400 };
 
-/** Tipos de línea del registro: telemetría, inferencia, alerta, conexión y despliegue. */
 export type LogKind = 'TEL' | 'INF' | 'ALR' | 'LNK' | 'OTA';
 export const LOG_KINDS: LogKind[] = ['TEL', 'INF', 'ALR', 'LNK', 'OTA'];
 
@@ -34,7 +29,6 @@ export interface LogLine {
   id: number;
   time: string;
   who: string;
-  /** Dispositivo al que lleva el clic, si lo hay */
   device: string | null;
   kind: LogKind;
   msg: string;
@@ -43,13 +37,11 @@ export interface LogLine {
 
 type FleetKey = 'id' | 'cpu' | 'ram' | 'temp' | 'latency';
 
-/** Media de los valores disponibles, ignorando los nulos. */
 function average(values: (number | null)[]): number | null {
   const v = values.filter((x): x is number => x !== null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 }
 
-/** Convierte un evento del WebSocket en una línea del registro en vivo. */
 export function toLogLine(e: LiveEvent, id: number, now = new Date()): LogLine | null {
   const time = now.toISOString().slice(11, 23);
   switch (e.type) {
@@ -80,12 +72,10 @@ export function toLogLine(e: LiveEvent, id: number, now = new Date()): LogLine |
   }
 }
 
-/** Filtro del registro en vivo por tipo y dispositivo. */
 export function logMatches(line: LogLine, kinds: ReadonlySet<LogKind>, device: string | null): boolean {
   return kinds.has(line.kind) && (!device || line.device === device);
 }
 
-/** Recupera la ventana de tiempo que el usuario eligió la última vez. */
 function readWindow(): LatencyWindow {
   try {
     const v = localStorage.getItem(RANGE_KEY);
@@ -95,10 +85,6 @@ function readWindow(): LatencyWindow {
   }
 }
 
-/**
- * Vista general: indicadores principales de la flota, tabla de dispositivos, gráfica de
- * latencia, registro de eventos en vivo, resumen de gobernanza y últimas alertas.
- */
 @Component({
   selector: 'eg-overview',
   imports: [ChartDirective, CountUpDirective, StatusBadgeComponent, TimeAgoPipe, RouterLink, MetricComponent],
@@ -119,7 +105,6 @@ export class OverviewComponent implements OnInit {
   protected readonly skeletonRows = [1, 2, 3, 4, 5, 6];
   protected readonly colorFor = colorFor;
 
-  // --- Registro en vivo ---------------------------------------------------
   private readonly allLog = signal<LogLine[]>([]);
   protected readonly paused = signal(false);
   private readonly hoverPaused = signal(false);
@@ -140,7 +125,6 @@ export class OverviewComponent implements OnInit {
     return this.allLog().filter((l) => l.id > newest && logMatches(l, this.logKinds(), this.logDevice())).length;
   });
 
-  // --- Gráfica --------------------------------------------------------------
   protected readonly window = signal<LatencyWindow>(readWindow());
   protected readonly windows: { key: LatencyWindow; label: string }[] = [
     { key: '5m', label: '5 min' },
@@ -151,7 +135,6 @@ export class OverviewComponent implements OnInit {
   protected readonly hiddenSeries = signal<ReadonlySet<string>>(new Set());
   protected readonly isolated = signal<string | null>(null);
 
-  // --- Tabla ------------------------------------------------------------------
   protected readonly fleetSort = new SortState<FleetKey>();
 
   protected readonly devices = computed(() => this.live.merge(this.baseDevices()));
@@ -178,14 +161,12 @@ export class OverviewComponent implements OnInit {
     return { deployed: s.deployed ?? 0, approved: s.approved ?? 0, draft: s.draft ?? 0, retired: s.retired ?? 0 };
   });
 
-  /** Solo las alertas sin resolver; las que el sistema cerró solo (por ejemplo, un dispositivo que volvió) no se muestran. */
   protected readonly alerts = computed(() => this.recentAlerts().filter((a) => a.status !== 'resolved').slice(0, 4));
 
   private readonly names = computed(() =>
     Object.fromEntries(this.baseDevices().map((d) => [d.id, d.id.toUpperCase()])),
   );
 
-  /** La ventana de 5 min usa los puntos recibidos en vivo; las de 1 h y 24 h, el historial del servidor. */
   private readonly chartSeries = computed<Record<string, Point[]>>(() => {
     if (this.window() !== '5m') return this.history();
     const since = Date.now() / 1000 - WINDOW_SECONDS['5m'];
@@ -206,7 +187,6 @@ export class OverviewComponent implements OnInit {
     );
   });
 
-  /** Segmentos encendidos de una barra según el porcentaje. */
   protected segmentsFor(pct: number | null): boolean[] {
     const lit = Math.round(((pct ?? 0) / 100) * SEGMENTS);
     return Array.from({ length: SEGMENTS }, (_, i) => i < lit);
@@ -216,7 +196,6 @@ export class OverviewComponent implements OnInit {
     return v === null ? '—' : `${v.toFixed(0)}%`;
   }
 
-  // --- Acciones de la gráfica ------------------------------------------------
   protected setWindow(w: LatencyWindow): void {
     if (this.window() === w) return;
     this.window.set(w);
@@ -228,7 +207,6 @@ export class OverviewComponent implements OnInit {
     this.loadHistory();
   }
 
-  /** Clic en una fila o en una tarjeta: deja solo ese dispositivo en la gráfica (otro clic lo deshace). */
   protected isolate(id: string): void {
     const name = id.toUpperCase();
     if (this.isolated() === id) {
@@ -252,14 +230,11 @@ export class OverviewComponent implements OnInit {
     this.hiddenSeries.set(new Set());
   }
 
-  // --- Acciones del registro ------------------------------------------------
-  /** Mientras el ratón está sobre el registro, este se congela para poder leerlo. */
   protected setHover(on: boolean): void {
     this.hoverPaused.set(on);
     this.syncFreeze();
   }
 
-  /** Congela o reanuda el registro en vivo. */
   protected togglePause(): void {
     this.paused.update((p) => !p);
     this.syncFreeze();

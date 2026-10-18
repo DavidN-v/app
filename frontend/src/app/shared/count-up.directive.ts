@@ -1,13 +1,7 @@
 import { Directive, ElementRef, OnDestroy, effect, inject, input } from '@angular/core';
 
-/** Duración de la animación del contador. */
 const DURATION_MS = 900;
 
-/**
- * <span [egCount]="valor" [decimals]="1" [pad]="2"></span>
- * Anima el número desde el valor anterior hasta el nuevo, como un contador mecánico.
- * Si el usuario ha pedido reducir las animaciones en su sistema, salta directamente al valor final.
- */
 @Directive({ selector: '[egCount]' })
 export class CountUpDirective implements OnDestroy {
   readonly egCount = input<number | null>(null);
@@ -28,7 +22,6 @@ export class CountUpDirective implements OnDestroy {
     cancelAnimationFrame(this.frame);
   }
 
-  /** Da formato al número con los decimales y los ceros a la izquierda indicados. */
   format(value: number | null): string {
     if (value === null || Number.isNaN(value)) return '—';
     const text = value.toFixed(this.decimals());
@@ -49,7 +42,6 @@ export class CountUpDirective implements OnDestroy {
     const start = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / DURATION_MS);
-      // Curva de desaceleración: avanza rápido al principio y frena al llegar al valor final
       const eased = 1 - Math.pow(1 - t, 4);
       const value = from + (target - from) * eased;
       node.textContent = this.format(value);

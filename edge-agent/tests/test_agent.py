@@ -150,3 +150,34 @@ def test_board_meter_measures_against_emulated_board():
     # En 2 s el proceso 1 usó 3 s de CPU y aparece un proceso 3 nuevo: 3 / (2 * 4) = 37.5 %
     procs[0] = [(1, 13.0, 512 * 1024 * 1024), (2, 5.0, 512 * 1024 * 1024), (3, 50.0, 0)]
     assert meter.sample() == (37.5, 25.0)
+
+
+def test_loader_receives_the_installed_model(tmp_path, artifact):
+    loaded = []
+    agent = EdgeAgent("rpi5-vision", FakeClient(), ModelStore(tmp_path / "m"),
+                      loader=lambda cmd, path: loaded.append((cmd["version"], path.exists())))
+    ack = agent.handle_deploy(json.dumps(command(artifact)).encode())
+    assert ack["status"] == "succeeded"
+    assert loaded == [("1.0", True)]
+
+
+def test_loader_failure_reverts_and_reports_failed(tmp_path, artifact):
+    def broken(cmd, path):
+        raise RuntimeError("formato no soportado")
+
+    store = ModelStore(tmp_path / "m")
+    agent = EdgeAgent("rpi5-vision", FakeClient(), store, loader=broken)
+    ack = agent.handle_deploy(json.dumps(command(artifact)).encode())
+    assert ack["status"] == "failed"
+    assert "formato no soportado" in ack["message"]
+    assert store.manifest()["current"] is None  # sigue en marcha el modelo anterior
+
+
+def test_connection_reads_credentials_and_tls_from_env(monkeypatch):
+    from edge_agent import connection
+
+    monkeypatch.setenv("EDGE_MQTT_TLS", "1")
+    assert connection.tls_enabled()
+    monkeypatch.setenv("EDGE_MQTT_TLS", "0")
+    client = connection.create_client("esp32-env")
+    assert client is not None

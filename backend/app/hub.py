@@ -1,13 +1,4 @@
-"""Estado en tiempo real guardado en memoria y envío de eventos a la consola.
-
-Aquí se guardan los datos recientes que no merece la pena escribir en la base de datos en cada
-mensaje: las últimas latencias, las confianzas para calcular el drift y las medias por minuto.
-También se mantiene la lista de navegadores conectados por WebSocket para enviarles cada evento.
-
-Los mensajes MQTT se procesan en un hilo distinto del de FastAPI. Por eso el acceso a los datos
-se protege con un cerrojo (lock) y los eventos se entregan al bucle principal con
-call_soon_threadsafe, que es la forma segura de pasar trabajo entre hilos en asyncio.
-"""
+"""Estado en tiempo real guardado en memoria y envío de eventos a la consola."""
 
 import asyncio
 import threading
@@ -20,7 +11,6 @@ CONFIDENCE_LEN = 500
 
 
 class LiveHub:
-    """Almacén en memoria compartido por toda la API (hay una única instancia, `hub`)."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -33,11 +23,9 @@ class LiveHub:
         self._buckets: dict[tuple[str, int], list[float]] = {}
 
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Guarda el bucle de eventos de FastAPI para poder enviarle eventos desde otros hilos."""
         self._loop = loop
 
     def subscribe(self) -> asyncio.Queue:
-        """Registra un navegador conectado; recibirá los eventos a través de esta cola."""
         q: asyncio.Queue = asyncio.Queue(maxsize=1000)
         with self._lock:
             self._subscribers.add(q)
@@ -48,7 +36,6 @@ class LiveHub:
             self._subscribers.discard(q)
 
     def record_latency(self, device_id: str, value: float, ts: float | None = None) -> None:
-        """Guarda la latencia en la serie reciente y la acumula en el minuto correspondiente."""
         ts = ts or time.time()
         with self._lock:
             self.latency[device_id].append((ts, value))
@@ -58,13 +45,11 @@ class LiveHub:
             b[2] = max(b[2], value)
 
     def recent_latency(self, device_id: str, n: int = 10) -> float | None:
-        """Media de las últimas `n` inferencias: una muestra aislada no es una tendencia."""
         with self._lock:
             values = [v for _, v in list(self.latency.get(device_id, ()))[-n:]]
         return sum(values) / len(values) if values else None
 
     def drain_buckets(self, before: float) -> list[tuple[str, int, float, float, int]]:
-        """Entrega los minutos ya cerrados (anteriores a `before`) para guardarlos."""
         with self._lock:
             done = [k for k in self._buckets if k[1] + 60 <= before]
             out = []
@@ -74,7 +59,6 @@ class LiveHub:
             return out
 
     def open_buckets(self) -> list[tuple[str, int, float, float, int]]:
-        """Minutos todavía en curso, para que las gráficas muestren también el minuto actual."""
         with self._lock:
             return [(k[0], k[1], v[0] / v[1], v[2], int(v[1])) for k, v in self._buckets.items() if v[1]]
 
@@ -92,7 +76,6 @@ class LiveHub:
             return list(self.confidence.get(f"{device_id}|{model or ''}", ()))
 
     def broadcast(self, event: dict[str, Any]) -> None:
-        """Envía un evento a todos los navegadores conectados. Se puede llamar desde cualquier hilo."""
         if self._loop is None:
             return
         with self._lock:

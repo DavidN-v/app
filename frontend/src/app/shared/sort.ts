@@ -2,10 +2,6 @@ import { signal } from '@angular/core';
 
 export type SortDir = 'asc' | 'desc';
 
-/**
- * Estado de ordenación de una tabla.
- * Un clic ordena descendente (el peor caso arriba), otro ascendente, el tercero quita el orden.
- */
 export class SortState<K extends string> {
   readonly key = signal<K | null>(null);
   readonly dir = signal<SortDir>('desc');
@@ -17,7 +13,6 @@ export class SortState<K extends string> {
     }
   }
 
-  /** Cambia el orden al pulsar la cabecera de una columna. */
   toggle(key: K): void {
     if (this.key() !== key) {
       this.key.set(key);
@@ -29,19 +24,16 @@ export class SortState<K extends string> {
     }
   }
 
-  /** Valor del atributo aria-sort, que indica el orden a los lectores de pantalla. */
   ariaSort(key: K): 'ascending' | 'descending' | 'none' {
     if (this.key() !== key) return 'none';
     return this.dir() === 'asc' ? 'ascending' : 'descending';
   }
 
-  /** Flecha que se muestra junto a la columna ordenada. */
   indicator(key: K): string {
     if (this.key() !== key) return '';
     return this.dir() === 'asc' ? '▲' : '▼';
   }
 
-  /** Ordena una copia; los valores nulos van siempre al final. */
   apply<T>(list: T[], accessors: Record<K, (row: T) => string | number | null | undefined>): T[] {
     const key = this.key();
     if (!key) return list;
@@ -58,7 +50,6 @@ export class SortState<K extends string> {
   }
 }
 
-/** Filtra filas cuyo texto contiene todas las palabras de la búsqueda (sin tildes ni mayúsculas). */
 export function matchesQuery(query: string, ...fields: (string | null | undefined)[]): boolean {
   const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
   const words = norm(query).split(/\s+/).filter(Boolean);

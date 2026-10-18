@@ -1,9 +1,4 @@
-// ===========================================================================
 // Estilos globales de la consola
-// Fondo gris muy oscuro y texto claro, inspirado en las pantallas de los terminales de control.
-// El rojo se reserva para lo que requiere atención y el verde para el indicador de conexión.
-// Esquinas rectas, rejilla visible, cifras grandes y datos en letra monoespaciada.
-// ===========================================================================
 :root {
   --bg: #15181d;
   --cell: #1c2027;
@@ -40,7 +35,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-// --- Efecto de pantalla antigua: líneas horizontales y textura ---------------
+// Efecto de pantalla antigua: líneas horizontales y textura
 body::before {
   content: '';
   position: fixed; inset: 0; z-index: var(--z-fx); pointer-events: none;
@@ -63,7 +58,7 @@ body::after {
 }
 @keyframes beam { from { transform: translateY(-140px); } to { transform: translateY(110vh); } }
 
-// --- Tipografía -------------------------------------------------------------
+// Tipografía
 h1, h2, h3, h4 { margin: 0; font-weight: 700; }
 h2, .label {
   font-family: var(--mono); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em;
@@ -88,7 +83,7 @@ a { color: var(--text); text-underline-offset: 3px; }
   &:focus { top: 12px; }
 }
 
-// --- Estructura -------------------------------------------------------------
+// Estructura
 .shell { display: grid; grid-template-columns: 236px 1fr; min-height: 100dvh; }
 
 .sidebar {
@@ -157,7 +152,7 @@ a { color: var(--text); text-underline-offset: 3px; }
 .content { padding: 20px 24px 48px; }
 .content > :not(router-outlet) { display: flex; flex-direction: column; gap: 16px; max-width: 1760px; }
 
-// --- Celdas con marcas en las esquinas --------------------------------------
+// Celdas con marcas en las esquinas
 .card {
   position: relative;
   background: var(--cell);
@@ -180,7 +175,7 @@ a { color: var(--text); text-underline-offset: 3px; }
   &::after { content: ' >>'; color: var(--red); }
   &:hover { color: var(--text); } }
 
-// --- Al cargar, las celdas aparecen una tras otra ---------------------------
+// Al cargar, las celdas aparecen una tras otra
 .boot > * { animation: boot 0.8s var(--ease-out) both; }
 @for $i from 1 through 12 {
   .boot > *:nth-child(#{$i}) { animation-delay: #{($i - 1) * 90}ms; }
@@ -191,7 +186,7 @@ a { color: var(--text); text-underline-offset: 3px; }
   65% { opacity: 0.35; } 75% { opacity: 1; }
 }
 
-// --- Vista general ----------------------------------------------------------
+// Vista general
 .ov-hero {
   display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr); gap: 1px;
   background: var(--line); border: 1px solid var(--line);
@@ -296,7 +291,7 @@ a { color: var(--text); text-underline-offset: 3px; }
 }
 .device-model { font-size: 12px; color: var(--muted); &::before { content: '> '; color: var(--unit, var(--red)); } }
 
-// --- Tablas -----------------------------------------------------------------
+// Tablas
 .table-wrap { overflow-x: auto; }
 .table {
   width: 100%; border-collapse: collapse; font-size: 12px;
@@ -328,7 +323,7 @@ a { color: var(--text); text-underline-offset: 3px; }
   &.skeleton-lg { height: 80px; }
 }
 
-// --- Estados: etiquetas rectas, sin píldoras -------------------------------
+// Estados: etiquetas rectas, sin píldoras
 .badge {
   display: inline-flex; align-items: center; padding: 2px 6px;
   font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
@@ -341,7 +336,7 @@ a { color: var(--text); text-underline-offset: 3px; }
   &.badge-muted { color: var(--dim); text-decoration: line-through; }
 }
 
-// --- Botones y formularios -------------------------------------------------
+// Botones y formularios
 .btn {
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px 16px; border: 1px solid var(--line-strong); background: transparent; color: var(--text);
@@ -424,7 +419,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
   input:focus-visible + span { outline: 2px solid var(--red); outline-offset: 2px; }
 }
 
-// --- Inicio de sesión -------------------------------------------------------
+// Inicio de sesión
 .login-page { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(380px, 1fr); background: var(--bg); }
 .login-intro {
   position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 28px;
@@ -455,12 +450,12 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
 }
 .login-hint { font-size: 12px; color: var(--dim); line-height: 1.5; margin: 0; border-top: 1px dashed var(--line); padding-top: 14px; }
 
-// --- Página no encontrada ---------------------------------------------------
+// Página no encontrada
 .not-found { padding: 24px 0; display: flex; flex-direction: column; gap: 16px;
   .code { font-family: var(--macro); font-weight: 900; font-size: clamp(8rem, 22vw, 20rem); line-height: 0.8; letter-spacing: -0.07em; color: var(--red); }
   h2 { font-size: 14px; } p { margin: 0; color: var(--muted); max-width: 60ch; } .btn { align-self: flex-start; } }
 
-// --- Adaptación a pantallas pequeñas ----------------------------------------
+// Adaptación a pantallas pequeñas
 @media (max-width: 1500px) { .device-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1280px) {
   .ov-hero { grid-template-columns: 1fr 1fr; .readouts-cell { grid-column: 1 / -1; } }
@@ -502,11 +497,9 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
                             animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
 }
 
-// ===========================================================================
 // Interacción: avisos, ordenación, filtros, umbrales y progreso
-// ===========================================================================
 
-// --- Avisos emergentes -------------------------------------------------------
+// Avisos emergentes
 .toasts {
   position: fixed; right: 20px; bottom: 20px; z-index: 60;
   display: flex; flex-direction: column-reverse; gap: 10px; width: min(380px, calc(100vw - 32px));
@@ -534,7 +527,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
 @keyframes toast-in { from { opacity: 0; transform: translateX(24px); } }
 @keyframes toast-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-// --- Cabeceras ordenables ---------------------------------------------------
+// Cabeceras ordenables
 .th-sort {
   background: none; border: 0; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
   cursor: pointer; white-space: nowrap;
@@ -543,7 +536,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color:
 th[aria-sort='ascending'], th[aria-sort='descending'] { color: var(--text); }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-// --- Gráfica: rango y filtro -----------------------------------------------
+// Gráfica: rango y filtro
 .seg-control { display: flex; border: 1px solid var(--line-strong);
   button { background: transparent; border: 0; border-right: 1px solid var(--line-strong); color: var(--muted);
            font: inherit; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 10px; cursor: pointer;
@@ -555,7 +548,7 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: var(--text); }
 .device-card { cursor: pointer;
   &.isolated { background: var(--cell-2); outline: 1px solid var(--unit); outline-offset: -1px; } }
 
-// --- Registro en vivo -------------------------------------------------------
+// Registro en vivo
 .log-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip { padding: 3px 8px; border: 1px solid var(--line-strong); background: transparent; color: var(--dim);
@@ -568,7 +561,7 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: var(--text); }
 .terminal li.clickable { cursor: pointer; &:hover { background: var(--cell-2); .msg { color: var(--text); } } }
 .terminal li.empty { display: block; }
 
-// --- Umbrales visibles ------------------------------------------------------
+// Umbrales visibles
 .metric.hot { color: var(--red); text-decoration: underline dotted; text-underline-offset: 3px; }
 [data-tip] { position: relative; }
 [data-tip]:hover::after, [data-tip]:focus-visible::after {
@@ -580,7 +573,7 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: var(--text); }
 .readout[data-tip]:hover::after { right: auto; left: 16px; bottom: auto; top: 8px; }
 .limit { margin-left: 6px; color: var(--dim); font-size: 10px; }
 
-// --- Progreso de despliegues -----------------------------------------------
+// Progreso de despliegues
 .stepper { display: grid; grid-template-columns: repeat(5, 18px); gap: 3px; margin-bottom: 4px;
   i { height: 6px; background: var(--cell-3); }
   i.done { background: var(--green); }
@@ -590,7 +583,7 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: var(--text); }
 .step-warn { display: block; margin-top: 2px; font-size: 11px; color: #facc15; }
 tr.slow { background: color-mix(in srgb, #facc15 6%, transparent); }
 
-// --- Varios -----------------------------------------------------------------
+// Varios
 .nav-count { margin-left: auto; margin-right: 18px; padding: 0 6px; background: var(--red); color: #000; font-size: 11px; font-weight: 700; }
 .sidebar nav a.active .nav-count { color: #000; }
 .telemetry-btn { background: transparent; border: 0; border-left: 1px solid var(--line); font: inherit; cursor: pointer; text-align: left;
@@ -599,3 +592,6 @@ tr.slow { background: color-mix(in srgb, #facc15 6%, transparent); }
 .pending-tag { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #facc15; }
 tr.focused { animation: focus-flash 2.4s var(--ease-out); outline: 1px solid #38bdf8; outline-offset: -1px; }
 @keyframes focus-flash { 0%, 30% { background: color-mix(in srgb, #38bdf8 22%, transparent); } }
+
+// Texto solo para lectores de pantalla (no se ve, pero se lee)
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

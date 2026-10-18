@@ -6,10 +6,6 @@ import { PolicyStore } from '../../core/policy.store';
 import { describeError } from '../../shared/errors';
 import { ToastService } from '../../shared/toast.service';
 
-/**
- * Página de políticas: un administrador puede cambiar cada valor o activarla y desactivarla.
- * Los demás roles solo pueden consultarlas.
- */
 @Component({
   selector: 'eg-policies',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,7 +66,6 @@ export class PoliciesComponent implements OnInit {
     this.api.policies().subscribe((p) => this.policies.set(p));
   }
 
-  /** Guarda el cambio; si undo es verdadero, se trata de deshacer el cambio anterior. */
   save(policy: Policy, patch: Partial<Pick<Policy, 'value' | 'enabled'>>, undo = false): void {
     if (patch.value !== undefined && patch.value === policy.value && patch.enabled === undefined) return;
     const before = { value: policy.value, enabled: policy.enabled };

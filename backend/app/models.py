@@ -1,15 +1,4 @@
-"""Modelo de datos: cada clase corresponde a una tabla de la base de datos.
-
-Tablas principales:
-- users: usuarios de la consola y su rol.
-- devices: dispositivos edge, su último estado conocido y el modelo que tienen instalado.
-- models: registro de modelos de IA con su versión, licencia, firma y estado de aprobación.
-- deployments: solicitudes de instalación de un modelo en un dispositivo.
-- policies: reglas de gobernanza editables (umbrales, licencias permitidas, etc.).
-- alerts: incidencias detectadas.
-- audit_log: historial encadenado de todas las acciones.
-- latency_minutes: latencia media por minuto, para las gráficas de 1 h y 24 h.
-"""
+"""Modelo de datos: cada clase corresponde a una tabla de la base de datos."""
 
 from datetime import UTC, datetime
 
@@ -30,8 +19,6 @@ from .db import Base
 
 
 def utcnow() -> datetime:
-    """Fecha y hora actual en UTC. Todas las fechas se guardan en UTC para evitar
-    confusiones con la zona horaria de cada equipo."""
     return datetime.now(UTC)
 
 
@@ -52,7 +39,6 @@ class Device(Base):
     location: Mapped[str] = mapped_column(String(128), default="")
     status: Mapped[str] = mapped_column(String(16), default="offline")  # online | offline
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Últimas lecturas recibidas; quedan vacías si el dispositivo no tiene ese sensor
     cpu: Mapped[float | None] = mapped_column(Float, nullable=True)
     ram: Mapped[float | None] = mapped_column(Float, nullable=True)
     temp: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -71,7 +57,6 @@ class MLModel(Base):
     version: Mapped[str] = mapped_column(String(32))
     framework: Mapped[str] = mapped_column(String(32))  # onnx | gguf | tflite
     task: Mapped[str] = mapped_column(String(64))
-    # Dirección del archivo del modelo y su resumen SHA-256, que el dispositivo comprueba al descargarlo
     artifact_uri: Mapped[str] = mapped_column(String(512))
     sha256: Mapped[str] = mapped_column(String(64))
     signature: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -140,8 +125,6 @@ class AuditEntry(Base):
 
 
 class LatencyMinute(Base):
-    """Latencia media y máxima por minuto y dispositivo. Sirve para las gráficas de 1 h y 24 h
-    y, al estar en la base de datos, no se pierde si se reinicia la API."""
     __tablename__ = "latency_minutes"
     __table_args__ = (UniqueConstraint("device_id", "minute"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

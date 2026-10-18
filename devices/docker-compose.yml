@@ -1,0 +1,96 @@
+# Aplicaciones de los dispositivos para ejecutarlas en el hardware real
+# (Raspberry Pi 5, o cualquier placa con Linux de 64 bits como el Arduino Uno Q).
+#
+# A diferencia del docker-compose.yml principal, aquí no se emula la placa: la telemetría mide el
+# equipo real (CPU, RAM y la temperatura del procesador) y las imágenes vienen de una cámara real.
+#
+# Uso, en la placa y desde la carpeta devices/:
+#   cp .env.example .env        # indicar la IP del servidor y el resto de opciones
+#   docker compose --profile vision up -d --build
+# Perfiles: vision, genai, agent (se pueden combinar si la placa tiene recursos suficientes).
+
+x-device: &device
+  restart: unless-stopped
+  volumes:
+    - ./certs:/certs:ro
+
+x-mqtt: &mqtt
+  EDGE_MQTT_HOST: ${SERVER:?indica la IP del servidor en devices/.env}
+  EDGE_MQTT_TLS: ${MQTT_TLS:-0}
+  EDGE_MQTT_CA: /certs/ca.crt
+
+services:
+  vision:
+    <<: *device
+    profiles: ["vision"]
+    build:
+      context: ..
+      dockerfile: devices/vision/Dockerfile
+    environment:
+      <<: *mqtt
+      EDGE_DEVICE_ID: ${VISION_DEVICE_ID:-rpi5-vision}
+      EDGE_MQTT_CERT: /certs/${VISION_DEVICE_ID:-rpi5-vision}.crt
+      EDGE_MQTT_KEY: /certs/${VISION_DEVICE_ID:-rpi5-vision}.key
+      VISION_CAMERA: ${VISION_CAMERA:-}
+      VISION_MODEL_NAME: ${VISION_MODEL_NAME:-yolo}
+      VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-8.1}
+      VISION_FPS: ${VISION_FPS:-2}
+      # Con cámara real no se simula la lente sucia
+      VISION_DIRTY_EVERY: "0"
+    volumes:
+      - ./certs:/certs:ro
+      - vision-models:/data/models
+    # Cámara USB: VISION_CAMERA_DEVICE=/dev/video0. Sin cámara USB se monta /dev/null, que no se usa
+    devices:
+      - ${VISION_CAMERA_DEVICE:-/dev/null}:${VISION_CAMERA_DEVICE:-/dev/null}
+    group_add: ["video"]
+    # Permite leer desde el contenedor el vídeo que emite rpicam-vid en la propia placa
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["8101:8101"]
+
+  llm:
+    <<: *device
+    profiles: ["genai"]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command: ["--hf-repo", "Qwen/Qwen2.5-0.5B-Instruct-GGUF", "--hf-file", "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+              "--host", "0.0.0.0", "--port", "8080", "--ctx-size", "4096", "--threads", "4",
+              "--cache-ram", "256", "--parallel", "1"]
+    environment:
+      LLAMA_CACHE: /models
+    volumes: [llm-models:/models]
+
+  genai:
+    <<: *device
+    profiles: ["genai"]
+    build:
+      context: ..
+      dockerfile: devices/genai/Dockerfile
+    environment:
+      <<: *mqtt
+      EDGE_DEVICE_ID: ${GENAI_DEVICE_ID:-rpi5-genai}
+      EDGE_MQTT_CERT: /certs/${GENAI_DEVICE_ID:-rpi5-genai}.crt
+      EDGE_MQTT_KEY: /certs/${GENAI_DEVICE_ID:-rpi5-genai}.key
+      LLM_URL: http://llm:8080
+      # El asistente consulta el estado de la flota a la API con la cuenta de solo lectura
+      GOV_API_URL: http://${SERVER}:8000
+      GOV_USER: viewer
+      GOV_PASSWORD: ${VIEWER_PASSWORD:-viewer123}
+    depends_on: [llm]
+    ports: ["8102:8102"]
+
+  agent:
+    <<: *device
+    profiles: ["agent"]
+    build:
+      context: ..
+      dockerfile: devices/agent/Dockerfile
+    environment:
+      <<: *mqtt
+      EDGE_DEVICE_ID: ${AGENT_DEVICE_ID:-rpi5-agent}
+      EDGE_MQTT_CERT: /certs/${AGENT_DEVICE_ID:-rpi5-agent}.crt
+      EDGE_MQTT_KEY: /certs/${AGENT_DEVICE_ID:-rpi5-agent}.key
+    ports: ["8103:8103"]
+
+volumes:
+  vision-models:
+  llm-models:

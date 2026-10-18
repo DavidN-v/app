@@ -1,9 +1,4 @@
-"""Datos iniciales que se cargan la primera vez que arranca la API.
-
-Siempre se crea un usuario por cada rol. Si la opción seed_demo_data está activada y la base
-de datos no tiene dispositivos, también se registran los seis dispositivos del laboratorio
-y el modelo que tiene instalado cada uno.
-"""
+"""Datos iniciales que se cargan la primera vez que arranca la API."""
 
 import hashlib
 
@@ -15,7 +10,6 @@ from .drift import BINS
 from .models import Device, MLModel, User, utcnow
 from .security import hash_password
 
-# Dispositivos del laboratorio: identificador, nombre, tipo de hardware y función
 DEMO_DEVICES = [
     ("rpi5-vision", "Raspberry Pi 5 (Visión)", "rpi5", "Visión artificial"),
     ("rpi5-genai", "Raspberry Pi 5 (GenAI)", "rpi5", "Modelo de lenguaje pequeño"),
@@ -51,14 +45,13 @@ DEMO_MODELS = [
 
 
 def run(db: Session) -> None:
-    """Carga los datos iniciales sin duplicar nada si ya existían."""
     s = get_settings()
     policies.ensure_defaults(db)
     if db.query(User).count() == 0:
         for username, role, pwd in [("admin", "admin", s.admin_password),
                                     ("approver", "approver", s.approver_password),
                                     ("operator", "operator", s.operator_password),
-                                    ("viewer", "viewer", "viewer123")]:
+                                    ("viewer", "viewer", s.viewer_password)]:
             db.add(User(username=username, role=role, password_hash=hash_password(pwd)))
         db.commit()
 
@@ -80,7 +73,6 @@ def run(db: Session) -> None:
         db.flush()
         db.get(Device, dev_id).current_model_id = model.id
         audit.record(db, "system", "model.seeded", "model", model.id, {"device": dev_id})
-    # Un modelo pendiente de aprobación para probar el flujo de gobernanza
     db.add(MLModel(
         name="yolo", version="8.2", framework="onnx", task="detección de objetos",
         license="agpl-3.0", metrics={"mAP50": 0.89, "reference_confidence_hist": _REF_HIST},
